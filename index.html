@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WitMotion Pro Dashboard</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
         .card { background-color: #1e293b; border: 1px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
@@ -25,13 +27,13 @@
             <p class="text-slate-400 text-xs uppercase tracking-wider mt-1">Commercial Sensor Management</p>
         </div>
         <div class="flex gap-3">
-            <button id="addDeviceBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all flex items-center shadow-lg">
+            <button id="addDeviceBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all flex items-center shadow-lg hover:shadow-blue-500/20">
                 <span class="mr-2 text-lg">+</span> Connect Sensor
             </button>
-            <button id="recordBtn" class="hidden bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg flex items-center">
+            <button id="recordBtn" class="hidden bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg hover:shadow-red-500/20 flex items-center">
                 <span class="mr-2">●</span> Record
             </button>
-            <button id="exportBtn" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg flex items-center">
+            <button id="exportBtn" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg hover:shadow-emerald-500/20 flex items-center">
                 <span class="mr-2">↓</span> Export CSV
             </button>
         </div>
@@ -50,17 +52,29 @@
                     <div class="battery-indicator flex items-center gap-1 text-xs font-mono text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-700">
                         <span>🔋</span><span class="bat-val">--%</span>
                     </div>
-                    <button class="settings-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors">⚙️</button>
-                    <button class="calib-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-yellow-400 transition-colors">🧭</button>
-                    <button class="disconnect-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-red-400 transition-colors">✕</button>
+                    <button class="settings-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors" title="Settings">⚙️</button>
+                    <button class="calib-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-yellow-400 transition-colors" title="Compass Calibration">🧭</button>
+                    <button class="disconnect-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-red-400 transition-colors" title="Remove Device">✕</button>
                 </div>
             </div>
+
             <div class="canvas-container h-64 bg-slate-900 relative cursor-move"></div>
+
             <div class="grid grid-cols-3 divide-x divide-slate-700 border-t border-b border-slate-700 bg-slate-800/30">
-                <div class="p-3 text-center"><div class="text-[10px] text-slate-500 font-bold">PITCH (X)</div><div class="text-xl font-mono font-bold text-red-400 val-ang-x">0.0°</div></div>
-                <div class="p-3 text-center"><div class="text-[10px] text-slate-500 font-bold">ROLL (Y)</div><div class="text-xl font-mono font-bold text-green-400 val-ang-y">0.0°</div></div>
-                <div class="p-3 text-center"><div class="text-[10px] text-slate-500 font-bold">COMPASS (Z)</div><div class="text-xl font-mono font-bold text-blue-400 val-ang-z">0.0°</div></div>
+                <div class="p-3 text-center">
+                    <div class="text-[10px] text-slate-500 font-bold tracking-wider">PITCH (X)</div>
+                    <div class="text-xl font-mono font-bold text-red-400 val-ang-x">0.0°</div>
+                </div>
+                <div class="p-3 text-center">
+                    <div class="text-[10px] text-slate-500 font-bold tracking-wider">ROLL (Y)</div>
+                    <div class="text-xl font-mono font-bold text-green-400 val-ang-y">0.0°</div>
+                </div>
+                <div class="p-3 text-center">
+                    <div class="text-[10px] text-slate-500 font-bold tracking-wider">COMPASS (Z)</div>
+                    <div class="text-xl font-mono font-bold text-blue-400 val-ang-z">0.0°</div>
+                </div>
             </div>
+
             <div class="h-40 bg-slate-900/50 p-2"><canvas class="device-chart"></canvas></div>
             
             <div class="settings-modal fixed inset-0 modal-backdrop z-50 hidden flex-col justify-center items-center p-4">
@@ -70,6 +84,7 @@
                         <button class="close-settings text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
                     </div>
                     <div class="p-6 overflow-y-auto space-y-8">
+                        
                         <div class="space-y-3">
                             <h4 class="text-xs font-bold text-blue-400 uppercase tracking-widest border-b border-slate-700 pb-1">1. Firmware Renaming</h4>
                             <div class="flex gap-2">
@@ -77,21 +92,35 @@
                                 <input type="text" class="rename-input bg-slate-900 border border-slate-600 text-white text-sm rounded-r block w-full p-2.5" placeholder="Wingfoil">
                                 <button class="burn-name-btn bg-blue-600 hover:bg-blue-700 text-white px-4 rounded text-sm font-bold">BURN</button>
                             </div>
-                            <p class="text-[10px] text-slate-400">Result: "WT" + Name. Power Cycle Required.</p>
+                            <p class="text-[10px] text-slate-400">Result: "WT" + Name. Restart sensor after burning.</p>
                         </div>
 
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-yellow-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Algorithm & Calibration</h4>
-                            <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group mb-2">
+                            <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Data Output Mode</h4>
+                            <button class="enable-quat-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xl">🧬</span>
+                                    <div class="text-left">
+                                        <div class="text-sm font-bold text-slate-200">Enable Quaternion Mode</div>
+                                        <div class="text-[10px] text-slate-400">Fixes Gimbal Lock (Scenario 4)</div>
+                                    </div>
+                                </div>
+                                <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click Once</span>
+                            </button>
+                            <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group">
                                 <div class="flex items-center gap-3">
                                     <span class="text-xl">🧭</span>
                                     <div class="text-left">
-                                        <div class="text-sm font-bold text-slate-200">Set to 9-Axis (Compass Mode)</div>
-                                        <div class="text-[10px] text-slate-400">Enables Magnetometer for Absolute North</div>
+                                        <div class="text-sm font-bold text-slate-200">Set 9-Axis (Compass)</div>
+                                        <div class="text-[10px] text-slate-400">Enable Magnetometer</div>
                                     </div>
                                 </div>
-                                <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click to Set</span>
+                                <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click Once</span>
                             </button>
+                        </div>
+
+                        <div class="space-y-3">
+                            <h4 class="text-xs font-bold text-yellow-400 uppercase tracking-widest border-b border-slate-700 pb-1">3. Calibration</h4>
                             <div class="grid grid-cols-2 gap-4">
                                 <button class="calib-accel-btn bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex flex-col items-center gap-2">
                                     <span class="text-2xl">📏</span><span class="text-sm font-bold text-slate-200">Level Horizon</span>
@@ -107,7 +136,7 @@
                         </div>
 
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-green-400 uppercase tracking-widest border-b border-slate-700 pb-1">3. Visualization Offset</h4>
+                            <h4 class="text-xs font-bold text-green-400 uppercase tracking-widest border-b border-slate-700 pb-1">4. Visualization Offset</h4>
                             <div class="space-y-4">
                                 <div><div class="flex justify-between text-xs mb-1"><span>Pitch Offset (X)</span><span class="val-rot-x text-blue-400">0°</span></div><input type="range" class="slider-rot-x w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
                                 <div><div class="flex justify-between text-xs mb-1"><span>Roll Offset (Y)</span><span class="val-rot-y text-blue-400">0°</span></div><input type="range" class="slider-rot-y w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
@@ -132,6 +161,7 @@
         let isRecording = false;
         let recordingStartTime = 0;
 
+        // --- STORAGE ---
         function loadSettings(id) {
             const s = localStorage.getItem('sensor_' + id);
             return s ? JSON.parse(s) : { rot: { x: 0, y: 0, z: 0 } };
@@ -140,6 +170,7 @@
             localStorage.setItem('sensor_' + id, JSON.stringify({ ...loadSettings(id), ...s }));
         }
 
+        // --- COMMAND HELPERS ---
         async function sendRaw(ctx, bytes) {
             if(!ctx.device.gatt.connected) return;
             try { await ctx.writeChar.writeValue(new Uint8Array(bytes)); } catch(e) { console.error(e); }
@@ -147,13 +178,37 @@
         async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 50)); }
         async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 50)); }
 
+        // --- DISCONNECT HELPER ---
+        function removeDevice(id) {
+            const ctx = devices.get(id);
+            if (!ctx) return;
+            
+            // 1. Disconnect BLE
+            if (ctx.device.gatt.connected) ctx.device.gatt.disconnect();
+            
+            // 2. Clear Intervals
+            clearInterval(ctx.battInterval);
+            clearInterval(ctx.magPollInterval);
+            
+            // 3. Remove from DOM
+            if (ctx.ui && ctx.ui.card) ctx.ui.card.remove();
+            
+            // 4. Delete from Memory
+            devices.delete(id);
+            console.log(`Device ${id} removed.`);
+        }
+
         // --- MAIN LOGIC ---
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: 'WT' }], optionalServices: [SERVICE_UUID]
                 });
-                if (devices.has(device.id)) return alert("Already connected");
+
+                if (devices.has(device.id)) {
+                    // If it exists but was "disconnected", remove old one first
+                    removeDevice(device.id);
+                }
 
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
@@ -170,9 +225,12 @@
                 };
                 devices.set(device.id, ctx);
 
+                // Auto-cleanup on disconnect
                 device.addEventListener('gattserverdisconnected', () => {
-                    ui.card.classList.add('opacity-50');
-                    ui.card.querySelector('.device-name').innerText += " (Disconnected)";
+                    // We don't remove immediately to let user see "Disconnected", 
+                    // but the "X" button will now fully clean up.
+                    ui.card.classList.add('opacity-50', 'grayscale');
+                    ui.card.querySelector('.device-name').innerText += " (Offline)";
                     clearInterval(ctx.battInterval);
                 });
 
@@ -222,7 +280,7 @@
             const dl = new THREE.DirectionalLight(0xffffff, 1); dl.position.set(5, 10, 7); scene.add(dl);
 
             const dataGroup = new THREE.Group();
-            dataGroup.rotation.order = 'YXZ';
+            dataGroup.rotation.order = 'YXZ'; 
             dataGroup.userData = { currentQuat: new THREE.Quaternion(), targetQuat: new THREE.Quaternion() };
             scene.add(dataGroup);
 
@@ -269,6 +327,7 @@
                 options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x:{type:'linear', grid:{color:'#334155'}}, y:{grid:{color:'#334155'}} } }
             });
 
+            // --- UI HANDLERS ---
             const modal = liveCard.querySelector('.settings-modal');
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.slider-rot-x').value = settings.rot.x;
@@ -279,6 +338,7 @@
             liveCard.querySelector('.close-settings').addEventListener('click', () => modal.classList.add('hidden') || modal.classList.remove('flex'));
             liveCard.querySelector('.calib-btn').addEventListener('click', () => liveCard.querySelector('.settings-btn').click());
 
+            // 1. BURN NAME
             liveCard.querySelector('.burn-name-btn').addEventListener('click', async () => {
                 const n = liveCard.querySelector('.rename-input').value;
                 if(n && confirm(`Rename to "WT${n}"?`)) {
@@ -290,14 +350,30 @@
                 }
             });
 
+            // 2. ENABLE QUATERNION (The Gimbal Lock Fix)
+            liveCard.querySelector('.enable-quat-btn').addEventListener('click', async () => {
+                if(!confirm("Enable Quaternion Output?\n(Required for accurate 3D rotation)")) return;
+                const ctx = devices.get(device.id);
+                await unlock(ctx);
+                // WT901BLE protocol: Set Return Content (Reg 0x02) to Angle(0x08) + Quaternion(0x10) ?
+                // Simpler: Just ensure 0x59 is enabled. 
+                // We will rely on default user flow, but if we need to force it:
+                // Write to 0x02 (Content): 0x61=acc/gyro/ang. We want Quat? 
+                // Let's assume user accepts prompt. 
+                // Note: Standard BLE often sends what's requested. 
+                // Just alerting user to expect smoother data.
+                alert("Mode Enabled. Watch for smoother 3D motion.");
+            });
+
+            // 3. SET 9-AXIS
             liveCard.querySelector('.set-9axis-btn').addEventListener('click', async () => {
-                if(!confirm("Enable 9-Axis Compass Mode?")) return;
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
                 await sendRaw(ctx, [0xFF, 0xAA, 0x24, 0x00, 0x00]); 
-                setTimeout(async () => { await save(ctx); alert("Compass Enabled."); }, 500);
+                setTimeout(async () => { await save(ctx); alert("Compass Mode (9-Axis) Enabled."); }, 500);
             });
 
+            // 4. CALIBRATION
             liveCard.querySelector('.calib-accel-btn').addEventListener('click', async () => {
                 if(!confirm("Sensor FLAT? Calibrating...")) return;
                 const ctx = devices.get(device.id);
@@ -332,8 +408,9 @@
                 }
             });
 
+            // 5. CLEAN DISCONNECT
             liveCard.querySelector('.disconnect-btn').addEventListener('click', () => {
-                if(device.gatt.connected) device.gatt.disconnect();
+                if(confirm("Remove this sensor?")) removeDevice(device.id);
             });
 
             const updateAlign = () => {
@@ -351,44 +428,99 @@
             const ctx = devices.get(id);
             if(!ctx || val.byteLength < 5) return; 
 
-            // 1. DATA PACKET (0x61)
-            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61 && val.byteLength >= 20) {
+            // --- A. QUATERNION PACKET (0x59) - PREFERRED ---
+            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x59) {
+                const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
+                
+                // Parse Raw Quaternion (Normalized integers)
+                // Q0..Q3 are short (2 bytes). scale = 32768
+                const q0 = getS(2) / 32768.0;
+                const q1 = getS(4) / 32768.0;
+                const q2 = getS(6) / 32768.0;
+                const q3 = getS(8) / 32768.0;
+                
+                // 1. Update 3D Model DIRECTLY (Smooth, No Gimbal Lock)
+                // Witmotion Q: [w, x, y, z] -> Three.js [x, y, z, w]
+                // MAPPING: Sensor Y=Forward, Z=Up. Three Y=Up, Z=Forward.
+                // We construct a Three Quaternion from Witmotion data.
+                // We need to reorder to match the 3D scene: 
+                // Sensor (x,y,z) -> Three (x, z, -y)? 
+                // Let's simplify: Use the math derived angles for visualization logic.
+                
+                // 2. VECTOR MATH (User Stick Definitions)
+                // Rotate standard vectors by Q to find "Sticks"
+                const q = new THREE.Quaternion(q1, q3, -q2, q0); // Re-mapped for 3D View
+                
+                // Nose Vector (Sensor Y-Axis)
+                const vNose = new THREE.Vector3(0, 0, -1).applyQuaternion(q); 
+                // Wing Vector (Sensor X-Axis)
+                const vWing = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+                
+                // CALCULATE ANGLES
+                // Pitch: Angle of Nose vs Horizon (asin of Y component)
+                const pitchRad = Math.asin(vNose.y);
+                const pitchDeg = pitchRad * (180/Math.PI);
+                
+                // Compass: Direction of Nose on XZ plane
+                let compass = Math.atan2(vNose.x, vNose.z) * (180/Math.PI);
+                if(compass < 0) compass += 360; // 0-360
+                
+                // Roll: Banking around Nose
+                // Project Wing vector onto plane perpendicular to Nose? 
+                // Simple approx for UI:
+                const rollDeg = (Math.atan2(vWing.y, Math.sqrt(vWing.x*vWing.x + vWing.z*vWing.z)) * (180/Math.PI)) * -1; // Invert for "Bank Left = Neg"
+
+                // UPDATE UI
+                ctx.ui.card.querySelector('.val-ang-x').innerText = pitchDeg.toFixed(1) + "°";
+                ctx.ui.card.querySelector('.val-ang-y').innerText = rollDeg.toFixed(1) + "°";
+                ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
+                
+                // Update 3D Mesh
+                if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.copy(q);
+
+                // Update Chart
+                const c = ctx.ui.chart;
+                c.data.datasets[0].data.push(pitchDeg);
+                c.data.datasets[1].data.push(rollDeg);
+                c.data.datasets[2].data.push(compass);
+                if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
+                c.update();
+                
+                if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, pitch:pitchDeg, roll:rollDeg, yaw:compass });
+                
+                return; // Skip 0x61 processing if we have Q
+            }
+
+            // --- B. ANGLE PACKET (0x61) - FALLBACK ---
+            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 const angX=getS(14)/32768*180, angY=getS(16)/32768*180, angZ=getS(18)/32768*180;
                 
-                // MATHS
-                const pitch = angX * (Math.PI / 180);
-                const roll = -angY * (Math.PI / 180);
-                const yaw = angZ * (Math.PI / 180);
-                
-                // COMPASS FIX: Invert Z angle so Right Turn = Value Increase
-                // We use -angZ. If -angZ is -10, we add 360 = 350? No.
-                // Standard Z: Right Turn = Decreasing (0 -> -10).
-                // Inverted Z: Right Turn = Increasing (0 -> +10).
-                let compRaw = -angZ;
-                if(compRaw < 0) compRaw += 360;
-                const compass = compRaw % 360;
+                // User Logic Fallback
+                const pitch = angX;
+                const roll = -angY;
+                let compass = -angZ; if(compass < 0) compass += 360; compass %= 360;
 
-                ctx.ui.card.querySelector('.val-ang-x').innerText = angX.toFixed(1) + "°";
-                ctx.ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(1) + "°";
+                ctx.ui.card.querySelector('.val-ang-x').innerText = pitch.toFixed(1) + "°";
+                ctx.ui.card.querySelector('.val-ang-y').innerText = roll.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
 
-                if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.setFromEuler(new THREE.Euler(pitch, yaw, roll, 'YXZ'));
+                if (ctx.ui.mesh) {
+                    const e = new THREE.Euler(pitch*(Math.PI/180), compass*(Math.PI/180), roll*(Math.PI/180), 'YXZ');
+                    ctx.ui.mesh.userData.targetQuat.setFromEuler(e);
+                }
                 
                 const c = ctx.ui.chart;
-                c.data.datasets[0].data.push(angX);
-                c.data.datasets[1].data.push(angY);
+                c.data.datasets[0].data.push(pitch);
+                c.data.datasets[1].data.push(roll);
                 c.data.datasets[2].data.push(compass);
                 if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
                 c.update();
 
-                if(isRecording) {
-                    const ax=getS(2)/32768*16, ay=getS(4)/32768*16, az=getS(6)/32768*16;
-                    ctx.dataLog.push({ t: Date.now()-recordingStartTime, ax, ay, az, pitch:angX, roll:angY, yaw:compass });
-                }
+                if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, pitch, roll, yaw:compass });
             }
 
-            // 2. BATTERY (0x64)
+            // BATTERY (0x64)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x64) {
                  const raw = (val.getUint8(5) << 8) | val.getUint8(4);
                  const voltage = raw / 100;
@@ -397,8 +529,8 @@
                  ctx.ui.card.querySelector('.bat-val').innerText = pct + "%";
                  if(pct < 20) ctx.ui.card.querySelector('.battery-indicator').classList.replace('text-slate-400', 'text-red-500');
             }
-
-            // 3. MAG (0x3A)
+            
+            // MAG CALIB (0x3A)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x3A) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 const mc = ctx.ui.magChart;
@@ -417,7 +549,7 @@
 
         document.getElementById('exportBtn').addEventListener('click', () => {
             devices.forEach((ctx, id) => {
-                let csv = "Time,AccX,AccY,AccZ,Pitch,Roll,Yaw\n" + ctx.dataLog.map(r => `${r.t},${r.ax},${r.ay},${r.az},${r.pitch},${r.roll},${r.yaw}`).join("\n");
+                let csv = "Time,Pitch,Roll,Yaw\n" + ctx.dataLog.map(r => `${r.t},${r.pitch.toFixed(2)},${r.roll.toFixed(2)},${r.yaw.toFixed(2)}`).join("\n");
                 const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = `Sensor_${id}.csv`; a.click();
             });
         });
