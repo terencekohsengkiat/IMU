@@ -110,6 +110,10 @@
         const READ_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
         const WRITE_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb";
 
+        // Import OrbitControls from CDN (Required for mouse interaction)
+        import("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js")
+            .then(module => { window.OrbitControls = module.OrbitControls; });
+
         // Global State
         const devices = new Map(); 
         let isRecording = false;
@@ -169,30 +173,37 @@
             // --- 3D SCENE SETUP ---
             const canvasContainer = liveCard.querySelector('.canvas-container');
             const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(50, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000); // Changed FOV to 50 for better view
+            scene.background = new THREE.Color(0x111827); // Dark gray background to match theme
+
+            const camera = new THREE.PerspectiveCamera(50, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(canvasContainer.offsetWidth, 256);
             canvasContainer.appendChild(renderer.domElement);
 
+            // Add Axes Helper (Red=X, Green=Y, Blue=Z) - VISUAL DEBUGGING
+            const axesHelper = new THREE.AxesHelper(3);
+            scene.add(axesHelper);
+
             // Lighting
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(2, 5, 5);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(5, 10, 7);
             scene.add(dirLight);
 
-            // Pivot Group
+            // Pivot Group (The object we rotate)
             const pivot = new THREE.Group();
             scene.add(pivot);
-            camera.position.z = 4; // Moved camera closer
+            camera.position.set(3, 2, 5); // Offset camera so we look AT the center
+            camera.lookAt(0, 0, 0);
 
-            // Default Cube (Red) - Visible if model fails
+            // 1. Add Placeholder Cube (Red)
             const geometry = new THREE.BoxGeometry(1.5, 0.5, 2);
-            const material = new THREE.MeshPhongMaterial({ color: 0xff4444 });
+            const material = new THREE.MeshPhongMaterial({ color: 0xff4444, wireframe: false });
             const placeholder = new THREE.Mesh(geometry, material);
             pivot.add(placeholder);
 
-            // Load .OBJ File
+            // 2. Load .OBJ File
             const loader = new THREE.OBJLoader();
             loader.load(
                 'assets/sensor.obj', 
@@ -213,10 +224,10 @@
                     const center = box.getCenter(new THREE.Vector3());
                     object.position.sub(center);
 
-                    // Material Fix
+                    // Material Fix (Make it Blue)
                     object.traverse((child) => {
                         if (child.isMesh) {
-                            child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 }); // Blue color
+                            child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 });
                         }
                     });
 
@@ -224,9 +235,16 @@
                 },
                 undefined,
                 function (error) {
-                    console.warn("3D Model failed to load. Using placeholder.", error);
+                    console.warn("3D Model failed to load. Keeping placeholder.", error);
                 }
             );
+
+            // --- ANIMATION LOOP (Crucial for visibility) ---
+            function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            }
+            animate();
 
             // --- CHART SETUP ---
             const ctx = liveCard.querySelector('.device-chart').getContext('2d');
@@ -249,12 +267,12 @@
                         x: { display: false } 
                     },
                     plugins: { 
-                        legend: { display: true, labels: { color: 'white' } } // LEGEND ENABLED
+                        legend: { display: true, labels: { color: 'white' } }
                     }
                 }
             });
 
-            // Button Event Listeners
+            // UI Bindings
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.settings-modal').classList.remove('hidden');
                 liveCard.querySelector('.settings-modal').classList.add('flex');
@@ -273,13 +291,12 @@
             return { scene, camera, renderer, mesh: pivot, chart, card: liveCard };
         }
 
-        // --- 3. DATA PARSING (CORRECTED INDICES) ---
+        // --- 3. DATA PARSING ---
         function handleData(event, deviceId) {
             const value = event.target.value;
             const context = devices.get(deviceId);
             if (!context) return;
 
-            // Header Check (0x55 0x61)
             if (value.getUint8(0) === 0x55 && value.getUint8(1) === 0x61) {
                 
                 const getShort = (idx) => {
@@ -291,11 +308,7 @@
                 const ay = getShort(4) / 32768 * 16;
                 const az = getShort(6) / 32768 * 16;
                 
-                // CORRECTED INDICES FROM PROTOCOL:
-                // Byte 12-13 is Gyro Z (Not Angle X!)
-                // Byte 14-15 is Roll (Angle X)
-                // Byte 16-17 is Pitch (Angle Y)
-                // Byte 18-19 is Yaw (Angle Z)
+                // CORRECTED INDICES
                 const angX = getShort(14) / 32768 * 180; 
                 const angY = getShort(16) / 32768 * 180; 
                 const angZ = getShort(18) / 32768 * 180; 
@@ -306,25 +319,24 @@
                 ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(2) + "°";
                 ui.card.querySelector('.val-ang-z').innerText = angZ.toFixed(2) + "°";
 
-                // Update 3D Model
+                // Update 3D Model Rotation
                 if (ui.mesh) {
                     ui.mesh.rotation.x = angX * (Math.PI / 180);
-                    ui.mesh.rotation.z = -angY * (Math.PI / 180); // Adjusted sign for standard view
+                    ui.mesh.rotation.z = -angY * (Math.PI / 180); 
                     ui.mesh.rotation.y = -angZ * (Math.PI / 180);
-                    ui.renderer.render(ui.scene, ui.camera);
                 }
 
                 // Update Chart
                 const chart = ui.chart;
                 chart.data.datasets[0].data.push(angX);
                 chart.data.datasets[1].data.push(angY);
-                chart.data.datasets[2].data.push(angZ); // Added Z axis to chart
+                chart.data.datasets[2].data.push(angZ); 
                 chart.data.datasets[0].data.shift();
                 chart.data.datasets[1].data.shift();
                 chart.data.datasets[2].data.shift();
                 chart.update();
 
-                // Recording Logic
+                // Recording
                 if (isRecording) {
                     const timestamp = Date.now() - recordingStartTime;
                     context.dataLog.push({ timestamp, ax, ay, az, angX, angY, angZ });
