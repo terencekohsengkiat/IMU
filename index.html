@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WitMotion Bluetooth Sensor Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; text-align: center; padding: 20px; }
+        h1 { color: #333; }
+        #connectBtn { padding: 15px 30px; font-size: 18px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
+        #connectBtn:hover { background-color: #0056b3; }
+        .data-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 20px; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: left; }
+        .card h3 { margin-top: 0; color: #555; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .value-row { display: flex; justify-content: space-between; margin: 10px 0; font-size: 18px; }
+        .label { font-weight: bold; color: #777; }
+        .value { font-family: monospace; color: #333; }
+        #status { color: #666; margin-bottom: 20px; font-style: italic; }
+    </style>
+</head>
+<body>
+
+    <h1>WitMotion Sensor Dashboard</h1>
+    <div id="status">Status: Disconnected</div>
+    <button id="connectBtn">Connect to Sensor</button>
+
+    <div class="data-container">
+        <div class="card">
+            <h3>Acceleration (g)</h3>
+            <div class="value-row"><span class="label">X:</span> <span id="accX" class="value">0.000</span></div>
+            <div class="value-row"><span class="label">Y:</span> <span id="accY" class="value">0.000</span></div>
+            <div class="value-row"><span class="label">Z:</span> <span id="accZ" class="value">0.000</span></div>
+        </div>
+
+        <div class="card">
+            <h3>Gyroscope (°/s)</h3>
+            <div class="value-row"><span class="label">X:</span> <span id="gyroX" class="value">0.000</span></div>
+            <div class="value-row"><span class="label">Y:</span> <span id="gyroY" class="value">0.000</span></div>
+            <div class="value-row"><span class="label">Z:</span> <span id="gyroZ" class="value">0.000</span></div>
+        </div>
+
+        <div class="card">
+            <h3>Angle (°)</h3>
+            <div class="value-row"><span class="label">X:</span> <span id="angleX" class="value">0.000</span></div>
+            <div class="value-row"><span class="label">Y:</span> <span id="angleY" class="value">0.000</span></div>
+            <div class="value-row"><span class="label">Z:</span> <span id="angleZ" class="value">0.000</span></div>
+        </div>
+    </div>
+
+    <script>
+        // UUIDs extracted from your python file
+        const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
+        const CHARACTERISTIC_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
+
+        const connectBtn = document.getElementById('connectBtn');
+        const statusDisplay = document.getElementById('status');
+
+        connectBtn.addEventListener('click', async () => {
+            try {
+                statusDisplay.textContent = "Status: Scanning...";
+                
+                // Request the device
+                const device = await navigator.bluetooth.requestDevice({
+                    // We accept all devices with this specific service UUID
+                    filters: [{ services: [SERVICE_UUID] }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                statusDisplay.textContent = "Status: Connecting...";
+                
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+                // Start notifications to get streaming data
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', handleData);
+
+                statusDisplay.textContent = "Status: Connected & Receiving Data";
+                connectBtn.style.backgroundColor = "#28a745";
+                connectBtn.textContent = "Connected";
+
+                // Handle disconnection
+                device.addEventListener('gattserverdisconnected', () => {
+                    statusDisplay.textContent = "Status: Disconnected";
+                    connectBtn.style.backgroundColor = "#007bff";
+                    connectBtn.textContent = "Connect to Sensor";
+                });
+
+            } catch (error) {
+                console.error(error);
+                statusDisplay.textContent = "Error: " + error.message;
+            }
+        });
+
+        function handleData(event) {
+            const data = event.target.value;
+            
+            // Check for the header 0x55 0x61
+            if (data.byteLength >= 20 && data.getUint8(0) === 0x55 && data.getUint8(1) === 0x61) {
+                
+                // Helper function to handle signed 16-bit integers
+                const getShort = (byte1, byte2) => {
+                    let val = (byte2 << 8) | byte1;
+                    if (val >= 32768) val -= 65536; // Convert to signed integer
+                    return val;
+                };
+
+                // --- ACCELERATION ---
+                // Formula: raw / 32768 * 16
+                const ax = (getShort(data.getUint8(2), data.getUint8(3)) / 32768 * 16).toFixed(3);
+                const ay = (getShort(data.getUint8(4), data.getUint8(5)) / 32768 * 16).toFixed(3);
+                const az = (getShort(data.getUint8(6), data.getUint8(7)) / 32768 * 16).toFixed(3);
+
+                document.getElementById('accX').innerText = ax;
+                document.getElementById('accY').innerText = ay;
+                document.getElementById('accZ').innerText = az;
+
+                // --- GYROSCOPE ---
+                // Formula: raw / 32768 * 2000
+                const gx = (getShort(data.getUint8(8), data.getUint8(9)) / 32768 * 2000).toFixed(3);
+                const gy = (getShort(data.getUint8(10), data.getUint8(11)) / 32768 * 2000).toFixed(3);
+                const gz = (getShort(data.getUint8(12), data.getUint8(13)) / 32768 * 2000).toFixed(3);
+
+                document.getElementById('gyroX').innerText = gx;
+                document.getElementById('gyroY').innerText = gy;
+                document.getElementById('gyroZ').innerText = gz;
+
+                // --- ANGLE ---
+                // Formula: raw / 32768 * 180
+                const angX = (getShort(data.getUint8(14), data.getUint8(15)) / 32768 * 180).toFixed(3);
+                const angY = (getShort(data.getUint8(16), data.getUint8(17)) / 32768 * 180).toFixed(3);
+                const angZ = (getShort(data.getUint8(18), data.getUint8(19)) / 32768 * 180).toFixed(3);
+
+                document.getElementById('angleX').innerText = angX;
+                document.getElementById('angleY').innerText = angY;
+                document.getElementById('angleZ').innerText = angZ;
+            }
+        }
+    </script>
+</body>
+</html>
