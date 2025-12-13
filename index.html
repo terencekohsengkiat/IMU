@@ -123,7 +123,6 @@
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    // Filter for devices starting with "WT" (Works for WT[1]..., WT901...)
                     filters: [{ namePrefix: 'WT' }],
                     optionalServices: [SERVICE_UUID]
                 });
@@ -220,11 +219,14 @@
             dirLight.position.set(5, 10, 7);
             scene.add(dirLight);
 
-            // --- DATA GROUP (Rotated by Sensor) ---
+            // --- DATA GROUP (Rotated by Sensor using Quaternions) ---
             const dataGroup = new THREE.Group();
-            dataGroup.rotation.order = 'ZYX'; // FIX: Match Sensor Rotation Order
-            // Store "Target" rotation for smoothing
-            dataGroup.userData = { targetRot: { x: 0, y: 0, z: 0 } };
+            
+            // Initialize Quaternions for smoothing
+            dataGroup.userData = { 
+                currentQuat: new THREE.Quaternion(),
+                targetQuat: new THREE.Quaternion()
+            };
             scene.add(dataGroup);
 
             // --- ALIGNMENT GROUP (Rotated by User Sliders) ---
@@ -266,18 +268,16 @@
                 }
             );
 
-            // --- SMOOTH ANIMATION LOOP ---
+            // --- SMOOTH ANIMATION LOOP (QUATERNION SLERP) ---
             function animate() {
                 requestAnimationFrame(animate);
                 
-                // Linear Interpolation (Lerp) for smoothness
-                // We access 'dataGroup' directly because it is in the local scope
-                const smoothing = 0.15; // Adjust 0.01 (slow) to 1.0 (instant)
+                // Slerp (Spherical Linear Interpolation) handles the 180-> -180 jump correctly
+                const smoothing = 0.15; 
                 
-                if (dataGroup.userData.targetRot) {
-                    dataGroup.rotation.x += (dataGroup.userData.targetRot.x - dataGroup.rotation.x) * smoothing;
-                    dataGroup.rotation.y += (dataGroup.userData.targetRot.y - dataGroup.rotation.y) * smoothing;
-                    dataGroup.rotation.z += (dataGroup.userData.targetRot.z - dataGroup.rotation.z) * smoothing;
+                if (dataGroup.userData.targetQuat) {
+                    dataGroup.userData.currentQuat.slerp(dataGroup.userData.targetQuat, smoothing);
+                    dataGroup.quaternion.copy(dataGroup.userData.currentQuat);
                 }
 
                 renderer.render(scene, camera);
@@ -291,9 +291,9 @@
                 data: {
                     labels: Array(50).fill(''),
                     datasets: [
-                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0 },
-                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0 },
-                        { label: 'Yaw', data: Array(50).fill(0), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 }
+                        { label: 'Pitch (X)', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Roll (Y)', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Yaw (Z)', data: Array(50).fill(0), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 }
                     ]
                 },
                 options: { 
@@ -341,17 +341,15 @@
             liveCard.querySelector('.slider-rot-y').addEventListener('input', updateAlignment);
             liveCard.querySelector('.slider-rot-z').addEventListener('input', updateAlignment);
 
-            // We return 'mesh' as dataGroup so handleData can update the TARGET
             return { scene, camera, renderer, mesh: dataGroup, chart, card: liveCard };
         }
 
-        // --- 3. DATA PARSING (CUSTOM AXIS MAPPING) ---
+        // --- 3. DATA PARSING (QUATERNION FIX) ---
         function handleData(event, deviceId) {
             const value = event.target.value;
             const context = devices.get(deviceId);
             if (!context) return;
 
-            // Header Check (0x55 0x61)
             if (value.getUint8(0) === 0x55 && value.getUint8(1) === 0x61) {
                 
                 const getShort = (idx) => {
@@ -363,39 +361,42 @@
                 const ay = getShort(4) / 32768 * 16;
                 const az = getShort(6) / 32768 * 16;
                 
-                // Raw Angles from Sensor (-180 to 180)
-                const angX = getShort(14) / 32768 * 180; // Sensor Roll
-                const angY = getShort(16) / 32768 * 180; // Sensor Pitch
-                const angZ = getShort(18) / 32768 * 180; // Sensor Yaw
+                const angX = getShort(14) / 32768 * 180; // Sensor X
+                const angY = getShort(16) / 32768 * 180; // Sensor Y
+                const angZ = getShort(18) / 32768 * 180; // Sensor Z
 
-                // --- FIX 2: COMPASS HEADING (0-360) ---
+                // --- TEXT DISPLAY (0-360 Compass) ---
                 let compassHeading = (angZ < 0) ? (angZ + 360) : angZ;
 
-                // Update UI Text
                 const ui = context.ui;
                 ui.card.querySelector('.val-ang-x').innerText = angX.toFixed(2) + "°";
                 ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(2) + "°";
-                ui.card.querySelector('.val-ang-z').innerText = compassHeading.toFixed(2) + "°"; 
+                ui.card.querySelector('.val-ang-z').innerText = compassHeading.toFixed(2) + "°";
 
-                // --- FIX 1: CUSTOM AXIS MAPPING FOR 3D MODEL ---
-                if (ui.mesh && ui.mesh.userData.targetRot) {
-                    // Sensor Z (Yaw) -> 3D Y (Up/Down Axis) - Spin on table
-                    ui.mesh.userData.targetRot.y = -angZ * (Math.PI / 180); 
+                // --- 3D ROTATION MAPPING (YOUR REQUEST) ---
+                // Sensor X -> Pitch (3D X)
+                // Sensor Y -> Roll (3D Z)
+                // Sensor Z -> Yaw (3D Y)
+                
+                if (ui.mesh && ui.mesh.userData.targetQuat) {
+                    // Convert Degrees to Radians
+                    const pitch = angX * (Math.PI / 180);
+                    const roll = angY * (Math.PI / 180); 
+                    const yaw = -angZ * (Math.PI / 180); // Negative to match standard compass rotation (Right = Clockwise)
+
+                    // Create Euler with specific order to prevent gimbal lock artifacts
+                    // YXZ is often better for Yaw-based rotations
+                    const euler = new THREE.Euler(pitch, yaw, roll, 'YXZ'); 
                     
-                    // Sensor X -> 3D X (Pitch Up/Down)
-                    // Note: If pitch is inverted (nose down when sensor goes up), remove the negative sign
-                    ui.mesh.userData.targetRot.x = angX * (Math.PI / 180); 
-
-                    // Sensor Y -> 3D Z (Roll/Bank)
-                    // Note: If roll is inverted (banks right when sensor rolls left), add a negative sign
-                    ui.mesh.userData.targetRot.z = angY * (Math.PI / 180); 
+                    // Update Target Quaternion
+                    ui.mesh.userData.targetQuat.setFromEuler(euler);
                 }
 
                 // Update Chart
                 const chart = ui.chart;
                 chart.data.datasets[0].data.push(angX);
                 chart.data.datasets[1].data.push(angY);
-                chart.data.datasets[2].data.push(compassHeading);
+                chart.data.datasets[2].data.push(compassHeading); 
                 chart.data.datasets[0].data.shift();
                 chart.data.datasets[1].data.shift();
                 chart.data.datasets[2].data.shift();
