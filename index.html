@@ -156,7 +156,7 @@
             }
         });
 
-        // --- 2. CREATE UI CARD ---
+        // --- 2. CREATE UI CARD (UPDATED FOR 3D MODEL) ---
         function createDeviceUI(device) {
             const template = document.getElementById('deviceTemplate');
             const clone = template.content.cloneNode(true);
@@ -172,16 +172,66 @@
             const canvasContainer = clone.querySelector('.canvas-container');
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(75, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ alpha: true });
+            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(canvasContainer.offsetWidth, 256);
             canvasContainer.appendChild(renderer.domElement);
 
-            // Placeholder Cube (Your Sensor Model)
-            const geometry = new THREE.BoxGeometry(1.5, 0.5, 2); // Roughly sensor shape
-            const material = new THREE.MeshNormalMaterial();
-            const cube = new THREE.Mesh(geometry, material);
-            scene.add(cube);
+            // --- LIGHTING (Required for imported models) ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 7);
+            scene.add(dirLight);
+
+            // --- PIVOT GROUP ---
+            // We rotate this 'pivot' group instead of the model directly.
+            // This allows us to swap the model (cube -> obj) without breaking the rotation logic.
+            const pivot = new THREE.Group();
+            scene.add(pivot);
             camera.position.z = 5;
+
+            // 1. Add Placeholder Cube (Instant visual feedback)
+            const geometry = new THREE.BoxGeometry(1.5, 0.5, 2);
+            const material = new THREE.MeshNormalMaterial();
+            const placeholder = new THREE.Mesh(geometry, material);
+            pivot.add(placeholder);
+
+            // 2. Load .OBJ File (Asynchronous)
+            const loader = new THREE.OBJLoader();
+            loader.load(
+                'assets/sensor.obj', // Make sure your file in GitHub is named exactly this
+                function (object) {
+                    // Remove placeholder
+                    pivot.remove(placeholder);
+                    
+                    // Normalize Scale (Commercial grade polish)
+                    // This ensures massive or tiny models fit nicely in the view
+                    const box = new THREE.Box3().setFromObject(object);
+                    const size = new THREE.Vector3();
+                    box.getSize(size);
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scaleFactor = 3 / maxDim; // Scale to fit in a 3-unit space
+                    object.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+                    // Center the model
+                    box.setFromObject(object);
+                    const center = box.getCenter(new THREE.Vector3());
+                    object.position.sub(center);
+
+                    // Apply a nice material
+                    object.traverse((child) => {
+                        if (child.isMesh) {
+                            child.material = new THREE.MeshNormalMaterial();
+                        }
+                    });
+
+                    pivot.add(object);
+                },
+                undefined, // Progress callback
+                function (error) {
+                    console.warn("Model failed to load, keeping placeholder.", error);
+                }
+            );
 
             // Setup Chart.js
             const ctx = clone.querySelector('.device-chart').getContext('2d');
@@ -190,11 +240,20 @@
                 data: {
                     labels: Array(50).fill(''),
                     datasets: [
-                        { label: 'Roll', data: Array(50).fill(0), borderColor: 'red', borderWidth: 1, pointRadius: 0 },
-                        { label: 'Pitch', data: Array(50).fill(0), borderColor: 'green', borderWidth: 1, pointRadius: 0 },
+                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 1, pointRadius: 0 }, // Red
+                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 1, pointRadius: 0 }, // Green
                     ]
                 },
-                options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { y: { display: false }, x: { display: false } } }
+                options: { 
+                    animation: false, 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    scales: { 
+                        y: { display: true, grid: { color: '#4b5563' } }, // Show Y axis grid
+                        x: { display: false } 
+                    },
+                    plugins: { legend: { display: false } }
+                }
             });
 
             // Bind Settings Buttons
@@ -218,7 +277,8 @@
 
             container.appendChild(clone);
 
-            return { scene, camera, renderer, mesh: cube, chart, card };
+            // Return 'pivot' as the mesh to rotate in handleData
+            return { scene, camera, renderer, mesh: pivot, chart, card };
         }
 
         // --- 3. DATA PARSING & VISUALIZATION LOOP ---
