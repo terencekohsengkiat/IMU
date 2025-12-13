@@ -111,7 +111,7 @@
         const WRITE_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb";
 
         // Global State
-        const devices = new Map(); // Store connected device objects
+        const devices = new Map(); 
         let isRecording = false;
         let recordingStartTime = 0;
 
@@ -119,7 +119,6 @@
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    // Search for ALL devices so you can find the correct name
                     acceptAllDevices: true,
                     optionalServices: [SERVICE_UUID]
                 });
@@ -134,10 +133,8 @@
                 const readChar = await service.getCharacteristic(READ_UUID);
                 const writeChar = await service.getCharacteristic(WRITE_UUID);
 
-                // Create UI for this device
                 const ui = createDeviceUI(device);
                 
-                // Store device context
                 const deviceContext = {
                     device, server, writeChar, ui,
                     dataLog: [],
@@ -145,11 +142,9 @@
                 };
                 devices.set(device.id, deviceContext);
 
-                // Start Data Stream
                 await readChar.startNotifications();
                 readChar.addEventListener('characteristicvaluechanged', (e) => handleData(e, device.id));
 
-                // Show Global Controls
                 document.getElementById('recordBtn').classList.remove('hidden');
 
             } catch (err) {
@@ -164,48 +159,46 @@
             const card = clone.querySelector('.device-card');
             const container = document.getElementById('deviceContainer');
 
-            // Set ID and Name
             card.dataset.id = device.id;
             clone.querySelector('.device-name').innerText = device.name || "Unknown Sensor";
             clone.querySelector('.device-id').innerText = device.id;
 
-            // *** CRITICAL FIX: Append to DOM BEFORE creating Chart/ThreeJS ***
             container.appendChild(clone);
-            // Now the elements are "live" on the screen, so we can select them safely.
             const liveCard = container.querySelector(`.device-card[data-id="${device.id}"]`);
 
-            // Setup 3D Scene
+            // --- 3D SCENE SETUP ---
             const canvasContainer = liveCard.querySelector('.canvas-container');
             const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
+            const camera = new THREE.PerspectiveCamera(50, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000); // Changed FOV to 50 for better view
             const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(canvasContainer.offsetWidth, 256);
             canvasContainer.appendChild(renderer.domElement);
 
-            // --- LIGHTING ---
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(5, 10, 7);
+            dirLight.position.set(2, 5, 5);
             scene.add(dirLight);
 
-            // --- PIVOT GROUP ---
+            // Pivot Group
             const pivot = new THREE.Group();
             scene.add(pivot);
-            camera.position.z = 5;
+            camera.position.z = 4; // Moved camera closer
 
-            // 1. Add Placeholder Cube (Immediate Visual)
+            // Default Cube (Red) - Visible if model fails
             const geometry = new THREE.BoxGeometry(1.5, 0.5, 2);
-            const material = new THREE.MeshNormalMaterial();
+            const material = new THREE.MeshPhongMaterial({ color: 0xff4444 });
             const placeholder = new THREE.Mesh(geometry, material);
             pivot.add(placeholder);
 
-            // 2. Load .OBJ File (Try to load user model)
+            // Load .OBJ File
             const loader = new THREE.OBJLoader();
             loader.load(
                 'assets/sensor.obj', 
                 function (object) {
-                    pivot.remove(placeholder); // Success! Remove cube.
+                    console.log("Model Loaded Successfully!");
+                    pivot.remove(placeholder); // Remove red cube
                     
                     // Normalize Scale
                     const box = new THREE.Box3().setFromObject(object);
@@ -215,33 +208,36 @@
                     const scaleFactor = 3 / maxDim; 
                     object.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-                    // Center the model
+                    // Center
                     box.setFromObject(object);
                     const center = box.getCenter(new THREE.Vector3());
                     object.position.sub(center);
 
-                    // Apply material
+                    // Material Fix
                     object.traverse((child) => {
-                        if (child.isMesh) child.material = new THREE.MeshNormalMaterial();
+                        if (child.isMesh) {
+                            child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 }); // Blue color
+                        }
                     });
 
                     pivot.add(object);
                 },
                 undefined,
                 function (error) {
-                    console.log("Using placeholder cube (Custom model not found or error).");
+                    console.warn("3D Model failed to load. Using placeholder.", error);
                 }
             );
 
-            // Setup Chart.js
+            // --- CHART SETUP ---
             const ctx = liveCard.querySelector('.device-chart').getContext('2d');
             const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: Array(50).fill(''),
                     datasets: [
-                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 1, pointRadius: 0 },
-                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 1, pointRadius: 0 },
+                        { label: 'Roll (X)', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Pitch (Y)', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Yaw (Z)', data: Array(50).fill(0), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 }
                     ]
                 },
                 options: { 
@@ -252,33 +248,32 @@
                         y: { display: true, grid: { color: '#4b5563' } }, 
                         x: { display: false } 
                     },
-                    plugins: { legend: { display: false } }
+                    plugins: { 
+                        legend: { display: true, labels: { color: 'white' } } // LEGEND ENABLED
+                    }
                 }
             });
 
-            // Bind Settings Buttons
+            // Button Event Listeners
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.settings-modal').classList.remove('hidden');
                 liveCard.querySelector('.settings-modal').classList.add('flex');
             });
-            
             liveCard.querySelector('.close-settings').addEventListener('click', () => {
                 liveCard.querySelector('.settings-modal').classList.add('hidden');
                 liveCard.querySelector('.settings-modal').classList.remove('flex');
             });
-
             liveCard.querySelector('.save-settings').addEventListener('click', () => {
                 const rate = liveCard.querySelector('.rate-select').value;
                 const bw = liveCard.querySelector('.bw-select').value;
                 applySettings(device.id, rate, bw);
             });
-
             liveCard.querySelector('.calibrate-btn').addEventListener('click', () => calibrateSensor(device.id));
 
             return { scene, camera, renderer, mesh: pivot, chart, card: liveCard };
         }
 
-        // --- 3. DATA PARSING & VISUALIZATION LOOP ---
+        // --- 3. DATA PARSING (CORRECTED INDICES) ---
         function handleData(event, deviceId) {
             const value = event.target.value;
             const context = devices.get(deviceId);
@@ -296,9 +291,14 @@
                 const ay = getShort(4) / 32768 * 16;
                 const az = getShort(6) / 32768 * 16;
                 
-                const angX = getShort(12) / 32768 * 180; // Roll
-                const angY = getShort(14) / 32768 * 180; // Pitch
-                const angZ = getShort(16) / 32768 * 180; // Yaw
+                // CORRECTED INDICES FROM PROTOCOL:
+                // Byte 12-13 is Gyro Z (Not Angle X!)
+                // Byte 14-15 is Roll (Angle X)
+                // Byte 16-17 is Pitch (Angle Y)
+                // Byte 18-19 is Yaw (Angle Z)
+                const angX = getShort(14) / 32768 * 180; 
+                const angY = getShort(16) / 32768 * 180; 
+                const angZ = getShort(18) / 32768 * 180; 
 
                 // Update UI Text
                 const ui = context.ui;
@@ -309,17 +309,19 @@
                 // Update 3D Model
                 if (ui.mesh) {
                     ui.mesh.rotation.x = angX * (Math.PI / 180);
-                    ui.mesh.rotation.z = angY * (Math.PI / 180); 
+                    ui.mesh.rotation.z = -angY * (Math.PI / 180); // Adjusted sign for standard view
                     ui.mesh.rotation.y = -angZ * (Math.PI / 180);
                     ui.renderer.render(ui.scene, ui.camera);
                 }
 
-                // Update Chart (Rolling Window)
+                // Update Chart
                 const chart = ui.chart;
                 chart.data.datasets[0].data.push(angX);
                 chart.data.datasets[1].data.push(angY);
+                chart.data.datasets[2].data.push(angZ); // Added Z axis to chart
                 chart.data.datasets[0].data.shift();
                 chart.data.datasets[1].data.shift();
+                chart.data.datasets[2].data.shift();
                 chart.update();
 
                 // Recording Logic
@@ -330,17 +332,14 @@
             }
         }
 
-        // --- 4. COMMANDS (SETTINGS & CALIBRATION) ---
+        // --- 4. COMMANDS ---
         async function sendCommand(deviceId, commandBytes) {
             const context = devices.get(deviceId);
             if (!context) return;
             try {
-                // Unlock command (required by protocol)
                 await context.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x69, 0x88, 0xB5])); 
-                // Actual command
-                await new Promise(r => setTimeout(r, 20)); // Small delay
+                await new Promise(r => setTimeout(r, 20));
                 await context.writeChar.writeValue(new Uint8Array(commandBytes));
-                // Save command
                 await new Promise(r => setTimeout(r, 20));
                 await context.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x00, 0x00, 0x00])); 
             } catch (e) {
@@ -349,9 +348,7 @@
         }
 
         function applySettings(deviceId, rateHex, bwHex) {
-            // Rate Command: FF AA 03 [Rate] 00
             sendCommand(deviceId, [0xFF, 0xAA, 0x03, parseInt(rateHex, 16), 0x00]);
-            // Bandwidth Command: FF AA 1F [BW] 00
             setTimeout(() => {
                 sendCommand(deviceId, [0xFF, 0xAA, 0x1F, parseInt(bwHex, 16), 0x00]);
             }, 100);
@@ -359,7 +356,6 @@
 
         function calibrateSensor(deviceId) {
             if(confirm("Keep sensor flat and still. Start Acceleration Calibration?")) {
-                // Accel Calib Command: FF AA 01 01 00
                 sendCommand(deviceId, [0xFF, 0xAA, 0x01, 0x01, 0x00]);
             }
         }
@@ -372,7 +368,6 @@
                 recordingStartTime = Date.now();
                 btn.innerText = "Stop Recording";
                 btn.classList.replace('bg-red-600', 'bg-gray-600');
-                // Clear previous logs
                 devices.forEach(d => d.dataLog = []);
             } else {
                 btn.innerText = "Start Recording";
@@ -382,7 +377,6 @@
         });
 
         document.getElementById('exportBtn').addEventListener('click', () => {
-            // Export all connected devices
             devices.forEach((context, id) => {
                 let csv = "Timestamp,AccX,AccY,AccZ,AngleX,AngleY,AngleZ\n";
                 context.dataLog.forEach(row => {
@@ -397,7 +391,6 @@
                 a.click();
             });
         });
-
     </script>
 </body>
 </html>
