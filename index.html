@@ -345,7 +345,7 @@
             return { scene, camera, renderer, mesh: dataGroup, chart, card: liveCard };
         }
 
-        // --- 3. DATA PARSING (AXIS & COMPASS FIX) ---
+        // --- 3. DATA PARSING (CUSTOM AXIS MAPPING) ---
         function handleData(event, deviceId) {
             const value = event.target.value;
             const context = devices.get(deviceId);
@@ -364,35 +364,38 @@
                 const az = getShort(6) / 32768 * 16;
                 
                 // Raw Angles from Sensor (-180 to 180)
-                const angX = getShort(14) / 32768 * 180; // Roll
-                const angY = getShort(16) / 32768 * 180; // Pitch
-                const angZ = getShort(18) / 32768 * 180; // Yaw
+                const angX = getShort(14) / 32768 * 180; // Sensor Roll
+                const angY = getShort(16) / 32768 * 180; // Sensor Pitch
+                const angZ = getShort(18) / 32768 * 180; // Sensor Yaw
 
                 // --- FIX 2: COMPASS HEADING (0-360) ---
-                // If Z is negative, add 360. Otherwise, keep it as is.
                 let compassHeading = (angZ < 0) ? (angZ + 360) : angZ;
 
                 // Update UI Text
                 const ui = context.ui;
                 ui.card.querySelector('.val-ang-x').innerText = angX.toFixed(2) + "°";
                 ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(2) + "°";
-                ui.card.querySelector('.val-ang-z').innerText = compassHeading.toFixed(2) + "°"; // Display 0-360
+                ui.card.querySelector('.val-ang-z').innerText = compassHeading.toFixed(2) + "°"; 
 
-                // --- FIX 1: AXIS MAPPING FOR 3D MODEL ---
-                // Sensor Z (Yaw) -> 3D Y (Up/Down Axis)
-                // Sensor Y (Pitch) -> 3D X (Tilt Axis)
-                // Sensor X (Roll)  -> 3D Z (Roll Axis)
+                // --- FIX 1: CUSTOM AXIS MAPPING FOR 3D MODEL ---
                 if (ui.mesh && ui.mesh.userData.targetRot) {
-                    ui.mesh.userData.targetRot.y = -angZ * (Math.PI / 180); // Yaw rotates around Vertical (Y)
-                    ui.mesh.userData.targetRot.x = angY * (Math.PI / 180);  // Pitch rotates around Side (X)
-                    ui.mesh.userData.targetRot.z = angX * (Math.PI / 180);  // Roll rotates around Forward (Z)
+                    // Sensor Z (Yaw) -> 3D Y (Up/Down Axis) - Spin on table
+                    ui.mesh.userData.targetRot.y = -angZ * (Math.PI / 180); 
+                    
+                    // Sensor X -> 3D X (Pitch Up/Down)
+                    // Note: If pitch is inverted (nose down when sensor goes up), remove the negative sign
+                    ui.mesh.userData.targetRot.x = angX * (Math.PI / 180); 
+
+                    // Sensor Y -> 3D Z (Roll/Bank)
+                    // Note: If roll is inverted (banks right when sensor rolls left), add a negative sign
+                    ui.mesh.userData.targetRot.z = angY * (Math.PI / 180); 
                 }
 
                 // Update Chart
                 const chart = ui.chart;
                 chart.data.datasets[0].data.push(angX);
                 chart.data.datasets[1].data.push(angY);
-                chart.data.datasets[2].data.push(compassHeading); // Graph the 0-360 format
+                chart.data.datasets[2].data.push(compassHeading);
                 chart.data.datasets[0].data.shift();
                 chart.data.datasets[1].data.shift();
                 chart.data.datasets[2].data.shift();
