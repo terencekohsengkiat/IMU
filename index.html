@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WitMotion Pro Dashboard</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
         .card { background-color: #1e293b; border: 1px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
@@ -57,7 +59,7 @@
             </div>
 
             <div class="canvas-container h-64 bg-slate-900 relative cursor-move">
-                <div class="absolute top-2 left-2 text-[10px] text-slate-500 font-mono mode-indicator">Mode: Auto</div>
+                <div class="absolute top-2 left-2 text-[10px] text-slate-500 font-mono font-bold bg-slate-900/80 px-2 py-1 rounded mode-indicator border border-slate-700">Mode: Auto (Default)</div>
             </div>
 
             <div class="grid grid-cols-3 divide-x divide-slate-700 border-t border-b border-slate-700 bg-slate-800/30">
@@ -86,7 +88,7 @@
                     <div class="p-6 overflow-y-auto space-y-8">
                         
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-blue-400 uppercase tracking-widest border-b border-slate-700 pb-1">1. Firmware Renaming</h4>
+                            <h4 class="text-xs font-bold text-blue-400 uppercase tracking-widest border-b border-slate-700 pb-1">1. Firmware</h4>
                             <div class="flex gap-2">
                                 <span class="flex items-center px-3 bg-slate-900 border border-slate-600 rounded-l text-slate-500 text-sm">WT</span>
                                 <input type="text" class="rename-input bg-slate-900 border border-slate-600 text-white text-sm rounded-r block w-full p-2.5" placeholder="Wingfoil">
@@ -95,16 +97,16 @@
                         </div>
 
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Output Mode (Fixes 90° Flip)</h4>
+                            <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Output Mode (CRITICAL)</h4>
                             <button class="enable-quat-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group">
                                 <div class="flex items-center gap-3">
                                     <span class="text-xl">🧬</span>
                                     <div class="text-left">
                                         <div class="text-sm font-bold text-slate-200">Enable Quaternion Mode</div>
-                                        <div class="text-[10px] text-slate-400">Essential for full 3D range</div>
+                                        <div class="text-[10px] text-slate-400">Fixes flipping at 90° roll.</div>
                                     </div>
                                 </div>
-                                <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click Once</span>
+                                <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click & Wait 2s</span>
                             </button>
                              <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group mt-2">
                                 <div class="flex items-center gap-3">
@@ -172,8 +174,8 @@
             if(!ctx.device.gatt.connected) return;
             try { await ctx.writeChar.writeValue(new Uint8Array(bytes)); } catch(e) { console.error(e); }
         }
-        async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 50)); }
-        async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 50)); }
+        async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 200)); } // Increased to 200ms
+        async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 200)); }
         
         function removeDevice(id) {
             const ctx = devices.get(id);
@@ -300,6 +302,7 @@
                 options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x:{type:'linear', grid:{color:'#334155'}}, y:{grid:{color:'#334155'}} } }
             });
 
+            // UI Handlers
             const modal = liveCard.querySelector('.settings-modal');
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.slider-rot-x').value = settings.rot.x;
@@ -321,12 +324,19 @@
                 }
             });
 
+            // --- THE FIX: ROBUST ENABLE QUATERNION ---
             liveCard.querySelector('.enable-quat-btn').addEventListener('click', async () => {
                 if(!confirm("Enable Quaternion Mode?")) return;
                 const ctx = devices.get(device.id);
-                await unlock(ctx);
-                await sendRaw(ctx, [0xFF, 0xAA, 0x02, 0x15, 0x00]); 
-                setTimeout(async () => { await save(ctx); alert("Quaternion Mode Enabled. Check 'Mode: Quaternion' on card."); }, 500);
+                // 1. Unlock
+                await unlock(ctx); // Waits 200ms
+                
+                // 2. Set Content: Accel(0x01) + Quat(0x10) = 0x11.
+                // Disabling Angle(0x04) prevents bandwidth choke.
+                await sendRaw(ctx, [0xFF, 0xAA, 0x02, 0x11, 0x00]); 
+                
+                // 3. Wait and Save
+                setTimeout(async () => { await save(ctx); alert("Command Sent. Watch 'Mode' indicator."); }, 400);
             });
 
             liveCard.querySelector('.set-9axis-btn').addEventListener('click', async () => {
@@ -389,64 +399,46 @@
             const ctx = devices.get(id);
             if(!ctx || val.byteLength < 5) return; 
 
-            // --- A. QUATERNION (0x59) - PURE VECTOR MATH (NO EULER LOCK) ---
+            // --- A. QUATERNION (0x59) ---
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x59) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 
-                ctx.ui.card.querySelector('.mode-indicator').innerText = "Mode: Quaternion (Vector)";
-                ctx.ui.card.querySelector('.mode-indicator').classList.add('text-green-500');
+                // VISUAL CONFIRMATION OF MODE
+                const modeLbl = ctx.ui.card.querySelector('.mode-indicator');
+                if(!modeLbl.innerText.includes("Quaternion")) {
+                    modeLbl.innerText = "Mode: Quaternion (Stable)";
+                    modeLbl.classList.replace('text-slate-500', 'text-green-500');
+                }
 
-                // 1. RAW DATA: w, x, y, z
+                // 1. Raw Quats
                 const q0 = getS(2) / 32768.0;
                 const q1 = getS(4) / 32768.0;
                 const q2 = getS(6) / 32768.0;
                 const q3 = getS(8) / 32768.0;
-
-                // 2. CREATE THREEJS QUATERNION (Correcting for Sensor Axis vs 3D World)
-                // Sensor: X=Right, Y=Fwd, Z=Up
-                // Three: X=Right, Y=Up, Z=Fwd (Usually)
-                // We map raw Q to Three Q directly. 
-                // Based on standard Witmotion: Q_three = new THREE.Quaternion(x, z, -y, w) is common.
-                // Let's rely on the visual alignment sliders to fix mesh orientation, and focus on Math here.
                 const q = new THREE.Quaternion(q1, q3, -q2, q0); 
 
-                // 3. APPLY ROTATION TO 3D MODEL DIRECTLY (No Euler Step!)
-                if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.copy(q);
-
-                // 4. CALCULATE NUMBERS VIA VECTORS (The "Stick" Method)
-                
-                // NOSE VECTOR: Start with (0,0,-1) and rotate it by Q
+                // 2. Vector Math
                 const vNose = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-                
-                // WING VECTOR: Start with (1,0,0) and rotate it by Q
                 const vWing = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
 
-                // UP VECTOR: Start with (0,1,0) and rotate it by Q
-                const vUp = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
-
-                // -- PITCH: Angle between Nose and Horizon (XZ plane) --
-                // Simply the asin of the Y component (Vertical)
-                // Range: -90 to +90
+                // Pitch (Nose vs Horizon)
                 const pitchDeg = Math.asin(vNose.y) * (180/Math.PI);
 
-                // -- ROLL: Banking angle --
-                // Angle between Wing Vector and Horizon.
-                // We project Wing onto the vertical plane perpendicular to heading.
-                // Simple approx: asin(vWing.y) gives bank angle. 
-                // But to get full 360, we look at Up Vector's tilt relative to global Up.
-                // Let's stick to your requested definition: "If board rolls left, negative."
-                // Since vWing starts at (1,0,0), if we roll left, Y goes down (negative).
-                // Range: -90 to +90 (Vector math handles the 89.9 jump naturally)
-                let rollDeg = Math.asin(vWing.y) * (180/Math.PI) * -1; // Invert to match typical 'Bank Left = Neg'
+                // Roll (Wing vs Horizon) - Inverted for "Bank Left = Neg"
+                // Using max clamp to prevent Math.asin NaN if > 1
+                const wy = Math.max(-1, Math.min(1, vWing.y));
+                let rollDeg = Math.asin(wy) * (180/Math.PI) * -1; 
 
-                // -- COMPASS: Direction of Nose on flat ground (XZ) --
+                // Compass (Nose on XZ)
                 let compass = Math.atan2(vNose.x, vNose.z) * (180/Math.PI);
                 if(compass < 0) compass += 360;
 
-                // 5. UPDATE UI
+                // 3. Updates
                 ctx.ui.card.querySelector('.val-ang-x').innerText = pitchDeg.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-y').innerText = rollDeg.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
+
+                if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.copy(q);
 
                 const c = ctx.ui.chart;
                 c.data.datasets[0].data.push(pitchDeg);
@@ -459,12 +451,15 @@
                 return;
             }
 
-            // B. ANGLE (0x61) - FALLBACK (Only if Quat not enabled)
+            // --- B. ANGLE FALLBACK (0x61) ---
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61) {
-                if(ctx.ui.card.querySelector('.mode-indicator').innerText.includes("Quaternion")) return;
+                // If we are getting 0x61, it means Quaternion mode is NOT active.
+                // We keep displaying "Auto"
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 const angX=getS(14)/32768*180, angY=getS(16)/32768*180, angZ=getS(18)/32768*180;
-                const pitch = angX, roll = -angY;
+                
+                const pitch = angX;
+                const roll = -angY;
                 let compass = -angZ; if(compass < 0) compass += 360; compass %= 360;
 
                 ctx.ui.card.querySelector('.val-ang-x').innerText = pitch.toFixed(1) + "°";
@@ -482,6 +477,7 @@
                 if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, pitch, roll, yaw:compass });
             }
 
+            // BATTERY (0x64)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x64) {
                  const raw = (val.getUint8(5) << 8) | val.getUint8(4);
                  const voltage = raw / 100;
