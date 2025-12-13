@@ -14,11 +14,6 @@
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
         .card { background-color: #1e293b; border: 1px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
         .modal-backdrop { background-color: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); }
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
 </head>
 <body class="min-h-screen p-6 flex flex-col">
@@ -41,8 +36,7 @@
         </div>
     </header>
 
-    <div id="deviceContainer" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-min">
-        </div>
+    <div id="deviceContainer" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-min"></div>
 
     <template id="deviceTemplate">
         <div class="device-card card rounded-xl overflow-hidden relative flex flex-col">
@@ -52,90 +46,54 @@
                     <span class="text-xs text-slate-500 font-mono device-id">ID: --</span>
                 </div>
                 <div class="flex gap-1">
-                    <button class="settings-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors" title="Settings">⚙️</button>
-                    <button class="calib-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-yellow-400 transition-colors" title="Calibration">🧭</button>
-                    <button class="disconnect-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-red-400 transition-colors" title="Disconnect">✕</button>
+                    <button class="settings-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors">⚙️</button>
+                    <button class="disconnect-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-red-400 transition-colors">✕</button>
                 </div>
             </div>
-
             <div class="canvas-container h-64 bg-slate-900 relative cursor-move"></div>
-
             <div class="grid grid-cols-3 divide-x divide-slate-700 border-t border-b border-slate-700 bg-slate-800/30">
-                <div class="p-3 text-center">
-                    <div class="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Pitch (X)</div>
-                    <div class="text-xl font-mono font-bold text-red-400 val-ang-x">0.0°</div>
-                </div>
-                <div class="p-3 text-center">
-                    <div class="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Roll (Y)</div>
-                    <div class="text-xl font-mono font-bold text-green-400 val-ang-y">0.0°</div>
-                </div>
-                <div class="p-3 text-center">
-                    <div class="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Compass (Z)</div>
-                    <div class="text-xl font-mono font-bold text-blue-400 val-ang-z">0.0°</div>
-                </div>
+                <div class="p-3 text-center"><div class="text-[10px] text-slate-500 font-bold">PITCH (X)</div><div class="text-xl font-mono font-bold text-red-400 val-ang-x">0.0°</div></div>
+                <div class="p-3 text-center"><div class="text-[10px] text-slate-500 font-bold">ROLL (Y)</div><div class="text-xl font-mono font-bold text-green-400 val-ang-y">0.0°</div></div>
+                <div class="p-3 text-center"><div class="text-[10px] text-slate-500 font-bold">COMPASS (Z)</div><div class="text-xl font-mono font-bold text-blue-400 val-ang-z">0.0°</div></div>
             </div>
-
-            <div class="h-40 bg-slate-900/50 p-2">
-                <canvas class="device-chart"></canvas>
-            </div>
-
+            <div class="h-40 bg-slate-900/50 p-2"><canvas class="device-chart"></canvas></div>
+            
             <div class="settings-modal fixed inset-0 modal-backdrop z-50 hidden flex-col justify-center items-center p-4">
                 <div class="bg-slate-800 border border-slate-600 rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
-                    
                     <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 rounded-t-xl">
-                        <h3 class="font-bold text-lg text-white">Device Configuration</h3>
+                        <h3 class="font-bold text-lg text-white">Configuration</h3>
                         <button class="close-settings text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
                     </div>
-
                     <div class="p-6 overflow-y-auto space-y-8">
-                        
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-blue-400 uppercase tracking-widest border-b border-slate-700 pb-1">Firmware Renaming</h4>
-                            <div>
-                                <label class="block text-sm text-slate-300 mb-1">New Device Name (Burn to Chip)</label>
-                                <div class="flex gap-2">
-                                    <span class="flex items-center px-3 bg-slate-900 border border-slate-600 rounded-l text-slate-500 text-sm">WT</span>
-                                    <input type="text" class="rename-input bg-slate-900 border border-slate-600 text-white text-sm rounded-r focus:ring-2 focus:ring-blue-500 block w-full p-2.5" placeholder="Wingfoil">
-                                    <button class="burn-name-btn bg-red-600 hover:bg-red-700 text-white px-4 rounded text-sm font-bold">BURN</button>
-                                </div>
-                                <p class="text-[10px] text-orange-400 mt-1">⚠️ Name will be 'WT' + your input. Max 10 chars.</p>
+                            <h4 class="text-xs font-bold text-blue-400 uppercase tracking-widest border-b border-slate-700 pb-1">Firmware</h4>
+                            <div class="flex gap-2">
+                                <span class="flex items-center px-3 bg-slate-900 border border-slate-600 rounded-l text-slate-500 text-sm">WT</span>
+                                <input type="text" class="rename-input bg-slate-900 border border-slate-600 text-white text-sm rounded-r block w-full p-2.5" placeholder="Name">
+                                <button class="burn-name-btn bg-red-600 hover:bg-red-700 text-white px-4 rounded text-sm font-bold">BURN</button>
                             </div>
                         </div>
-
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-yellow-400 uppercase tracking-widest border-b border-slate-700 pb-1">Magnetic Calibration</h4>
-                            <div class="flex flex-col gap-3">
-                                <button class="calib-mag-btn bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex flex-col items-center gap-2 group transition-all">
-                                    <span class="text-2xl group-hover:scale-110 transition-transform">🧭</span>
-                                    <span class="text-sm font-bold text-slate-200">Start Compass Calibration</span>
-                                    <span class="text-[10px] text-slate-400 text-center">Click, then rotate sensor 360° on all axes.<br>Dots will form a circle below.</span>
+                            <h4 class="text-xs font-bold text-yellow-400 uppercase tracking-widest border-b border-slate-700 pb-1">Calibration</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <button class="calib-accel-btn bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex flex-col items-center gap-2">
+                                    <span class="text-2xl">📏</span><span class="text-sm font-bold text-slate-200">Level Horizon</span>
                                 </button>
-                                
-                                <div class="mag-viz-container hidden bg-black rounded border border-slate-700 p-2">
-                                    <div class="text-center text-xs text-slate-400 mb-1">Live Magnetic Field (X vs Y)</div>
-                                    <div class="h-48 w-full relative">
-                                        <canvas class="mag-scatter-chart"></canvas>
-                                    </div>
-                                    <div class="text-[10px] text-slate-500 text-center mt-1">Aim for a perfect circle</div>
-                                </div>
+                                <button class="calib-mag-btn bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex flex-col items-center gap-2">
+                                    <span class="text-2xl">🧭</span><span class="text-sm font-bold text-slate-200">Compass Calib</span>
+                                </button>
+                            </div>
+                            <div class="mag-viz-container hidden bg-black rounded border border-slate-700 p-2">
+                                <div class="text-center text-xs text-slate-400 mb-1">Live Magnetic Field (X vs Y)</div>
+                                <div class="h-48 w-full"><canvas class="mag-scatter-chart"></canvas></div>
                             </div>
                         </div>
-
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-green-400 uppercase tracking-widest border-b border-slate-700 pb-1">3D Visualization Offset</h4>
+                            <h4 class="text-xs font-bold text-green-400 uppercase tracking-widest border-b border-slate-700 pb-1">3D Offset</h4>
                             <div class="space-y-4">
-                                <div>
-                                    <div class="flex justify-between text-xs mb-1"><span>Pitch Offset (X)</span><span class="val-rot-x text-blue-400">0°</span></div>
-                                    <input type="range" class="slider-rot-x w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0">
-                                </div>
-                                <div>
-                                    <div class="flex justify-between text-xs mb-1"><span>Roll Offset (Y)</span><span class="val-rot-y text-blue-400">0°</span></div>
-                                    <input type="range" class="slider-rot-y w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0">
-                                </div>
-                                <div>
-                                    <div class="flex justify-between text-xs mb-1"><span>Yaw Offset (Z)</span><span class="val-rot-z text-blue-400">0°</span></div>
-                                    <input type="range" class="slider-rot-z w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0">
-                                </div>
+                                <div><div class="flex justify-between text-xs mb-1"><span>Pitch (X)</span><span class="val-rot-x text-blue-400">0°</span></div><input type="range" class="slider-rot-x w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
+                                <div><div class="flex justify-between text-xs mb-1"><span>Roll (Y)</span><span class="val-rot-y text-blue-400">0°</span></div><input type="range" class="slider-rot-y w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
+                                <div><div class="flex justify-between text-xs mb-1"><span>Yaw (Z)</span><span class="val-rot-z text-blue-400">0°</span></div><input type="range" class="slider-rot-z w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
                             </div>
                         </div>
                     </div>
@@ -145,12 +103,10 @@
     </template>
 
     <script>
-        // --- CONFIGURATION ---
         const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
         const READ_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
         const WRITE_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb";
 
-        // Load 3D Controls
         import("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js")
             .then(module => { window.OrbitControls = module.OrbitControls; });
 
@@ -158,25 +114,30 @@
         let isRecording = false;
         let recordingStartTime = 0;
 
-        // --- STORAGE ---
-        function loadSettings(deviceId) {
-            const saved = localStorage.getItem('sensor_config_' + deviceId);
-            return saved ? JSON.parse(saved) : { rot: { x: 0, y: 0, z: 0 } }; // Default settings
+        function loadSettings(id) {
+            const s = localStorage.getItem('sensor_' + id);
+            return s ? JSON.parse(s) : { rot: { x: 0, y: 0, z: 0 } };
         }
-        function saveSettings(deviceId, settings) {
-            const current = loadSettings(deviceId);
-            localStorage.setItem('sensor_config_' + deviceId, JSON.stringify({ ...current, ...settings }));
+        function saveSettings(id, s) {
+            localStorage.setItem('sensor_' + id, JSON.stringify({ ...loadSettings(id), ...s }));
         }
 
-        // --- MAIN CONNECTION ---
+        // --- COMMAND HELPERS (THE FIX) ---
+        async function sendRaw(ctx, bytes) {
+            if(!ctx.device.gatt.connected) return;
+            try { await ctx.writeChar.writeValue(new Uint8Array(bytes)); } catch(e) { console.error(e); }
+        }
+
+        async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 50)); }
+        async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 50)); }
+
+        // --- CONNECTION ---
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'WT' }],
-                    optionalServices: [SERVICE_UUID]
+                    filters: [{ namePrefix: 'WT' }], optionalServices: [SERVICE_UUID]
                 });
-
-                if (devices.has(device.id)) return alert("Device already connected!");
+                if (devices.has(device.id)) return alert("Already connected");
 
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
@@ -184,148 +145,105 @@
                 const writeChar = await service.getCharacteristic(WRITE_UUID);
 
                 const ui = createDeviceUI(device);
-                
-                const ctx = {
-                    device, server, writeChar, ui,
-                    dataLog: [],
-                    isMagCalibrating: false,
-                    magPollInterval: null
-                };
+                const ctx = { device, server, writeChar, ui, dataLog: [], isMagCalibrating: false };
                 devices.set(device.id, ctx);
+
+                device.addEventListener('gattserverdisconnected', () => {
+                    ui.card.classList.add('opacity-50');
+                    ui.card.querySelector('.device-name').innerText += " (Disconnected)";
+                    ui.card.querySelector('.disconnect-btn').innerText = "♻";
+                });
 
                 await readChar.startNotifications();
                 readChar.addEventListener('characteristicvaluechanged', (e) => handleData(e, device.id));
 
                 document.getElementById('recordBtn').classList.remove('hidden');
                 document.getElementById('exportBtn').classList.remove('hidden');
-
-            } catch (err) { console.error(err); }
+            } catch (e) { console.error(e); }
         });
 
-        // --- UI CREATION ---
         function createDeviceUI(device) {
             const template = document.getElementById('deviceTemplate');
             const clone = template.content.cloneNode(true);
-            const card = clone.querySelector('.device-card');
             const container = document.getElementById('deviceContainer');
-            
-            // Load persistent settings (Alignment only, Name is read from device/user)
             const settings = loadSettings(device.id);
             
+            const card = clone.querySelector('.device-card');
             card.dataset.id = device.id;
-            clone.querySelector('.device-name').innerText = device.name; // Use Bluetooth Name initially
+            clone.querySelector('.device-name').innerText = device.name;
             clone.querySelector('.device-id').innerText = device.id;
-
             container.appendChild(clone);
+            
             const liveCard = container.querySelector(`.device-card[data-id="${device.id}"]`);
 
-            // 1. THREE.JS SETUP
+            // 3D Setup
             const canvasContainer = liveCard.querySelector('.canvas-container');
-            const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0f172a); 
-
+            const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0f172a);
             const camera = new THREE.PerspectiveCamera(50, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(canvasContainer.offsetWidth, 256);
             canvasContainer.appendChild(renderer.domElement);
 
-            // Observers
             new ResizeObserver(() => {
                 const w = canvasContainer.clientWidth, h = canvasContainer.clientHeight;
                 if(w && h) { renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix(); }
             }).observe(canvasContainer);
 
-            // Lighting & Helpers
             scene.add(new THREE.AxesHelper(3));
             scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-            const dl = new THREE.DirectionalLight(0xffffff, 1);
-            dl.position.set(5, 10, 7);
-            scene.add(dl);
+            const dl = new THREE.DirectionalLight(0xffffff, 1); dl.position.set(5, 10, 7); scene.add(dl);
 
-            // Groups
             const dataGroup = new THREE.Group();
-            dataGroup.rotation.order = 'YXZ'; // Yaw (Y) is dominant
+            dataGroup.rotation.order = 'YXZ';
             dataGroup.userData = { currentQuat: new THREE.Quaternion(), targetQuat: new THREE.Quaternion() };
             scene.add(dataGroup);
 
             const alignmentGroup = new THREE.Group();
-            // Apply saved offset
-            alignmentGroup.rotation.set(
-                settings.rot.x * Math.PI/180, 
-                settings.rot.y * Math.PI/180, 
-                settings.rot.z * Math.PI/180
-            );
+            alignmentGroup.rotation.set(settings.rot.x * Math.PI/180, settings.rot.y * Math.PI/180, settings.rot.z * Math.PI/180);
             dataGroup.add(alignmentGroup);
 
-            camera.position.set(3, 2, 5);
-            camera.lookAt(0,0,0);
+            camera.position.set(3, 2, 5); camera.lookAt(0,0,0);
 
-            // Model Loader
             new THREE.OBJLoader().load('assets/sensor.obj', obj => {
                 const box = new THREE.Box3().setFromObject(obj);
-                const size = new THREE.Vector3(); box.getSize(size);
-                const scale = 3 / Math.max(size.x, size.y, size.z);
-                obj.scale.set(scale, scale, scale);
+                const s = 3 / Math.max(box.max.x-box.min.x, box.max.y-box.min.y, box.max.z-box.min.z);
+                obj.scale.set(s, s, s);
                 obj.position.sub(box.getCenter(new THREE.Vector3()));
                 obj.traverse(c => { if(c.isMesh) c.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 }); });
                 alignmentGroup.add(obj);
-            }, undefined, err => {
-                const cube = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 2), new THREE.MeshPhongMaterial({ color: 0xff4444 }));
-                alignmentGroup.add(cube);
+            }, undefined, () => {
+                alignmentGroup.add(new THREE.Mesh(new THREE.BoxGeometry(1.5,0.5,2), new THREE.MeshPhongMaterial({color:0xff4444})));
             });
 
-            // Animation Loop (Quaternion Slerp)
             function animate() {
                 requestAnimationFrame(animate);
                 if(dataGroup.userData.targetQuat) {
-                    dataGroup.userData.currentQuat.slerp(dataGroup.userData.targetQuat, 0.15); // Smooth step
+                    dataGroup.userData.currentQuat.slerp(dataGroup.userData.targetQuat, 0.15);
                     dataGroup.quaternion.copy(dataGroup.userData.currentQuat);
                 }
                 renderer.render(scene, camera);
             }
             animate();
 
-            // 2. MAIN CHART (Pitch/Roll/Yaw)
-            const ctx = liveCard.querySelector('.device-chart').getContext('2d');
-            const chart = new Chart(ctx, {
+            // Charts
+            const chart = new Chart(liveCard.querySelector('.device-chart').getContext('2d'), {
                 type: 'line',
-                data: {
-                    labels: Array(50).fill(''),
-                    datasets: [
-                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#f87171', borderWidth: 2, pointRadius: 0 }, // Red
-                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#4ade80', borderWidth: 2, pointRadius: 0 }, // Green
-                        { label: 'Yaw', data: Array(50).fill(0), borderColor: '#60a5fa', borderWidth: 2, pointRadius: 0 }  // Blue
-                    ]
-                },
-                options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: {display:false}, y: {grid:{color:'#334155'}} }, plugins: {legend:{labels:{color:'white'}}} }
+                data: { labels: Array(50).fill(''), datasets: [
+                    { label: 'Pitch', data: [], borderColor: '#f87171', borderWidth: 2, pointRadius: 0 },
+                    { label: 'Roll', data: [], borderColor: '#4ade80', borderWidth: 2, pointRadius: 0 },
+                    { label: 'Yaw', data: [], borderColor: '#60a5fa', borderWidth: 2, pointRadius: 0 }
+                ]},
+                options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x:{display:false}, y:{grid:{color:'#334155'}} }, plugins:{legend:{labels:{color:'white'}}} }
             });
 
-            // 3. MAG SCATTER CHART (For Calibration Viz)
-            const magCtx = liveCard.querySelector('.mag-scatter-chart').getContext('2d');
-            const magChart = new Chart(magCtx, {
+            const magChart = new Chart(liveCard.querySelector('.mag-scatter-chart').getContext('2d'), {
                 type: 'scatter',
-                data: {
-                    datasets: [{
-                        label: 'Mag Field (X vs Y)',
-                        data: [],
-                        backgroundColor: '#fbbf24'
-                    }]
-                },
-                options: {
-                    animation: false,
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { type: 'linear', position: 'bottom', grid: {color:'#334155'}, title: {display:true, text:'Mag X', color:'white'} },
-                        y: { grid: {color:'#334155'}, title: {display:true, text:'Mag Y', color:'white'} }
-                    }
-                }
+                data: { datasets: [{ label: 'XY Field', data: [], backgroundColor: '#fbbf24' }] },
+                options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x:{type:'linear', grid:{color:'#334155'}}, y:{grid:{color:'#334155'}} } }
             });
 
-            // --- BINDINGS ---
+            // Logic
             const modal = liveCard.querySelector('.settings-modal');
-            
-            // Open Settings: Also update range sliders to match saved state
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.slider-rot-x').value = settings.rot.x;
                 liveCard.querySelector('.slider-rot-y').value = settings.rot.y;
@@ -333,201 +251,126 @@
                 modal.classList.remove('hidden'); modal.classList.add('flex');
             });
             liveCard.querySelector('.close-settings').addEventListener('click', () => modal.classList.add('hidden') || modal.classList.remove('flex'));
-            liveCard.querySelector('.calib-btn').addEventListener('click', () => liveCard.querySelector('.settings-btn').click()); // Shortcut
+            liveCard.querySelector('.disconnect-btn').addEventListener('click', () => {
+                if(device.gatt.connected) device.gatt.disconnect();
+                else document.getElementById('addDeviceBtn').click(); // Retry logic
+            });
 
-            // Renaming Logic
             liveCard.querySelector('.burn-name-btn').addEventListener('click', () => {
-                const name = liveCard.querySelector('.rename-input').value;
-                if(!name || name.length > 10) return alert("Invalid Name (Max 10 chars)");
-                if(confirm(`Permanently rename sensor to "WT${name}"?`)) {
-                    burnName(device.id, "WT" + name);
+                const n = liveCard.querySelector('.rename-input').value;
+                if(n && confirm(`Rename to WT${n}?`)) {
+                    const ctx = devices.get(device.id);
+                    unlock(ctx).then(() => sendRaw(ctx, new TextEncoder().encode("WT" + n + "\r\n"))).then(() => save(ctx));
+                    alert("Name sent. Restart sensor.");
                 }
             });
 
-            // Alignment Sliders
-            const updateAlign = () => {
-                const r = {
-                    x: liveCard.querySelector('.slider-rot-x').value,
-                    y: liveCard.querySelector('.slider-rot-y').value,
-                    z: liveCard.querySelector('.slider-rot-z').value
-                };
-                liveCard.querySelector('.val-rot-x').innerText = r.x + '°';
-                liveCard.querySelector('.val-rot-y').innerText = r.y + '°';
-                liveCard.querySelector('.val-rot-z').innerText = r.z + '°';
+            liveCard.querySelector('.calib-accel-btn').addEventListener('click', async () => {
+                if(!confirm("Sensor FLAT? Calibrating (Wait 5s)...")) return;
+                const ctx = devices.get(device.id);
+                const btn = liveCard.querySelector('.calib-accel-btn');
+                btn.innerText = "⏳ Calibrating...";
+                await unlock(ctx);
+                await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x01, 0x00]); // Start
+                setTimeout(async () => {
+                    await save(ctx); // Save after delay
+                    btn.innerText = "✅ Done! (Level Horizon)";
+                    setTimeout(() => btn.innerText = "Level Horizon", 2000);
+                }, 5000); // 5 Second Delay
+            });
+
+            liveCard.querySelector('.calib-mag-btn').addEventListener('click', async (e) => {
+                const ctx = devices.get(device.id);
+                const btn = e.currentTarget;
+                const viz = liveCard.querySelector('.mag-viz-container');
                 
+                if(!ctx.isMagCalibrating) {
+                    if(!confirm("Start Compass Calibration? Rotate 360° on all axes.")) return;
+                    await unlock(ctx);
+                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x07, 0x00]); // Start
+                    ctx.isMagCalibrating = true;
+                    btn.classList.replace('bg-slate-700', 'bg-green-600');
+                    btn.querySelector('span:nth-child(2)').innerText = "FINISH (Save)";
+                    viz.classList.remove('hidden');
+                    ctx.magPollInterval = setInterval(() => sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x3A, 0x00]), 100);
+                } else {
+                    clearInterval(ctx.magPollInterval);
+                    await unlock(ctx);
+                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x00, 0x00]); // End
+                    setTimeout(async () => {
+                        await save(ctx); // Patient Save
+                        alert("Calibration Saved.");
+                    }, 500);
+                    
+                    ctx.isMagCalibrating = false;
+                    btn.classList.replace('bg-green-600', 'bg-slate-700');
+                    btn.querySelector('span:nth-child(2)').innerText = "Compass Calib";
+                    viz.classList.add('hidden');
+                    magChart.data.datasets[0].data = []; magChart.update();
+                }
+            });
+
+            const updateAlign = () => {
+                const r = { x: liveCard.querySelector('.slider-rot-x').value, y: liveCard.querySelector('.slider-rot-y').value, z: liveCard.querySelector('.slider-rot-z').value };
                 alignmentGroup.rotation.set(r.x * Math.PI/180, r.y * Math.PI/180, r.z * Math.PI/180);
                 saveSettings(device.id, { rot: r });
             };
             liveCard.querySelectorAll('input[type="range"]').forEach(i => i.addEventListener('input', updateAlign));
 
-            // Calibration Buttons
-            liveCard.querySelector('.calib-mag-btn').addEventListener('click', (e) => toggleMagMode(device.id, e.currentTarget, liveCard));
-
             return { scene, camera, renderer, mesh: dataGroup, chart, magChart, card: liveCard };
         }
 
-        // --- DATA LOGIC ---
         function handleData(event, id) {
             const val = event.target.value;
             const ctx = devices.get(id);
             if(!ctx || val.byteLength < 20) return;
 
-            // 1. STANDARD PACKET (0x61) - Acceleration, Velocity, Angle
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
-                
-                // Raw values
                 const ax=getS(2)/32768*16, ay=getS(4)/32768*16, az=getS(6)/32768*16;
                 const angX=getS(14)/32768*180, angY=getS(16)/32768*180, angZ=getS(18)/32768*180;
 
-                // --- USER SPECIFIED MATH ---
                 const pitch = angX * (Math.PI / 180);
-                const roll  = -angY * (Math.PI / 180); // Negative as requested
-                const yaw   = angZ * (Math.PI / 180);  // Positive as requested
-
+                const roll = -angY * (Math.PI / 180);
+                const yaw = angZ * (Math.PI / 180);
                 const compass = angZ < 0 ? angZ + 360 : angZ;
 
-                // Update Text HUD
                 ctx.ui.card.querySelector('.val-ang-x').innerText = angX.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
 
-                // Update 3D Rotation (Using User Axis Mapping)
-                // Pitch -> Sensor X -> 3D X
-                // Roll -> Sensor Y -> 3D Z (Banking)
-                // Yaw -> Sensor Z -> 3D Y (Spin)
-                if (ctx.ui.mesh) {
-                    const e = new THREE.Euler(pitch, yaw, roll, 'YXZ'); // YXZ order helps prevent gimbal lock on yaw
-                    ctx.ui.mesh.userData.targetQuat.setFromEuler(e);
-                }
+                if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.setFromEuler(new THREE.Euler(pitch, yaw, roll, 'YXZ'));
 
-                // Update Main Chart
                 const c = ctx.ui.chart;
-                c.data.datasets[0].data.push(angX);     // Pitch
-                c.data.datasets[1].data.push(angY);     // Roll
-                c.data.datasets[2].data.push(compass);  // Yaw
+                c.data.datasets[0].data.push(angX);
+                c.data.datasets[1].data.push(angY);
+                c.data.datasets[2].data.push(compass);
                 if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
                 c.update();
 
-                if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, ax, ay, az, angX, angY, angZ:compass });
+                if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, ax, ay, az, pitch:angX, roll:angY, yaw:compass });
             }
 
-            // 2. MAG PACKET (0x71) - ONLY WHEN CALIBRATING
-            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71) {
-                // If this is a Mag Read response (Register 0x3A)
-                // Byte 2 = 0x3A, Byte 3 = 0x00
-                // Data starts at Byte 4? Protocol: 55 71 [RegL] [RegH] [D0L] [D0H]...
-                // So if RegL=3A, then Byte 4 is HxL
-                if (val.getUint8(2) === 0x3A) {
-                    const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
-                    const hx = getS(4);
-                    const hy = getS(6);
-                    // hz = getS(8)
-                    
-                    // Update Mag Scatter Plot
-                    const mc = ctx.ui.magChart;
-                    mc.data.datasets[0].data.push({ x: hx, y: hy });
-                    if(mc.data.datasets[0].data.length > 300) mc.data.datasets[0].data.shift();
-                    mc.update();
-                }
+            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x3A) {
+                const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
+                const mc = ctx.ui.magChart;
+                mc.data.datasets[0].data.push({ x: getS(4), y: getS(6) });
+                if(mc.data.datasets[0].data.length > 300) mc.data.datasets[0].data.shift();
+                mc.update();
             }
         }
 
-        // --- COMMANDS ---
-        async function sendBytes(id, bytes) {
-            const ctx = devices.get(id);
-            if(!ctx) return;
-            try {
-                await ctx.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x69, 0x88, 0xB5])); // Unlock
-                await new Promise(r => setTimeout(r, 20));
-                await ctx.writeChar.writeValue(new Uint8Array(bytes));
-                await new Promise(r => setTimeout(r, 20));
-                await ctx.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x00, 0x00, 0x00])); // Save
-            } catch(e) { console.error(e); }
-        }
-
-        // --- FIRMWARE RENAMING ---
-        async function burnName(id, newName) {
-            const ctx = devices.get(id);
-            if(!ctx) return;
-            
-            // Command: "WT" + Name + "\r\n"
-            const encoder = new TextEncoder();
-            const payload = encoder.encode(newName + "\r\n"); 
-            
-            try {
-                // Note: Renaming doesn't usually require the Hex Unlock, but we send it just in case
-                await ctx.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x69, 0x88, 0xB5])); 
-                await new Promise(r => setTimeout(r, 50));
-                await ctx.writeChar.writeValue(payload); // Send ASCII String
-                await new Promise(r => setTimeout(r, 50));
-                await ctx.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x00, 0x00, 0x00])); // Save
-                alert("Name command sent! Please RESTART the sensor power to see the change.");
-            } catch(e) { console.error(e); alert("Failed to write name"); }
-        }
-
-        // --- MAG CALIBRATION LOGIC ---
-        function toggleMagMode(id, btn, card) {
-            const ctx = devices.get(id);
-            const viz = card.querySelector('.mag-viz-container');
-            
-            if(!ctx.isMagCalibrating) {
-                if(!confirm("Start Compass Calibration? Rotate 360° on all axes (East/North).")) return;
-                
-                // 1. Send Start Command (FF AA 01 07 00)
-                sendBytes(id, [0xFF, 0xAA, 0x01, 0x07, 0x00]);
-                
-                // 2. UI Updates
-                ctx.isMagCalibrating = true;
-                btn.classList.replace('bg-slate-700', 'bg-green-600');
-                btn.querySelector('span:nth-child(2)').innerText = "FINISH CALIBRATION";
-                viz.classList.remove('hidden');
-
-                // 3. Start Polling Loop (Request Mag Data every 100ms)
-                // We need to poll because normal 0x61 packet DOES NOT contain Mag data
-                ctx.magPollInterval = setInterval(async () => {
-                    // Read Register 0x3A (HX) -> Command: FF AA 27 3A 00
-                    if(ctx.device.gatt.connected) {
-                        await ctx.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x27, 0x3A, 0x00]));
-                    }
-                }, 100);
-
-            } else {
-                // Stop
-                clearInterval(ctx.magPollInterval);
-                // Send End Command (FF AA 01 00 00)
-                sendBytes(id, [0xFF, 0xAA, 0x01, 0x00, 0x00]);
-                
-                ctx.isMagCalibrating = false;
-                btn.classList.replace('bg-green-600', 'bg-slate-700');
-                btn.querySelector('span:nth-child(2)').innerText = "Start Compass Calibration";
-                viz.classList.add('hidden');
-                
-                // Clear the scatter plot
-                ctx.ui.magChart.data.datasets[0].data = [];
-                ctx.ui.magChart.update();
-                
-                alert("Calibration Finished. Data Saved.");
-            }
-        }
-
-        // --- RECORDING ---
         document.getElementById('recordBtn').addEventListener('click', function() {
             isRecording = !isRecording;
-            this.classList.toggle('bg-red-600');
-            this.classList.toggle('bg-slate-600');
+            this.classList.toggle('bg-red-600'); this.classList.toggle('bg-slate-600');
             this.querySelector('span').innerText = isRecording ? "■" : "●";
             if(isRecording) { recordingStartTime = Date.now(); devices.forEach(d => d.dataLog = []); }
         });
 
         document.getElementById('exportBtn').addEventListener('click', () => {
             devices.forEach((ctx, id) => {
-                let csv = "Time,AccX,AccY,AccZ,Roll,Pitch,Yaw\n" + 
-                    ctx.dataLog.map(r => `${r.t},${r.ax.toFixed(3)},${r.ay.toFixed(3)},${r.az.toFixed(3)},${r.angX.toFixed(2)},${r.angY.toFixed(2)},${r.angZ.toFixed(2)}`).join("\n");
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(new Blob([csv]));
-                a.download = `Sensor_${id}.csv`;
-                a.click();
+                let csv = "Time,AccX,AccY,AccZ,Pitch,Roll,Yaw\n" + ctx.dataLog.map(r => `${r.t},${r.ax},${r.ay},${r.az},${r.pitch},${r.roll},${r.yaw}`).join("\n");
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = `Sensor_${id}.csv`; a.click();
             });
         });
     </script>
