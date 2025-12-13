@@ -179,6 +179,21 @@
             const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(canvasContainer.offsetWidth, 256);
             canvasContainer.appendChild(renderer.domElement);
+            
+            const resizeObserver = new ResizeObserver(() => {
+                const width = canvasContainer.clientWidth;
+                const height = canvasContainer.clientHeight;
+                
+                if (width > 0 && height > 0) {
+                    // Update Renderer
+                    renderer.setSize(width, height, false); // false prevents style overwrites
+                    
+                    // Update Camera Lens
+                    camera.aspect = width / height;
+                    camera.updateProjectionMatrix();
+                }
+            });
+            resizeObserver.observe(canvasContainer);
 
             // Add Axes Helper (Red=X, Green=Y, Blue=Z) - VISUAL DEBUGGING
             const axesHelper = new THREE.AxesHelper(3);
