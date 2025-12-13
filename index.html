@@ -3,140 +3,344 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WitMotion Bluetooth Sensor Dashboard</title>
+    <title>WitMotion Commercial Dashboard</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; text-align: center; padding: 20px; }
-        h1 { color: #333; }
-        #connectBtn { padding: 15px 30px; font-size: 18px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
-        #connectBtn:hover { background-color: #0056b3; }
-        .data-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-top: 20px; }
-        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; text-align: left; }
-        .card h3 { margin-top: 0; color: #555; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .value-row { display: flex; justify-content: space-between; margin: 10px 0; font-size: 18px; }
-        .label { font-weight: bold; color: #777; }
-        .value { font-family: monospace; color: #333; }
-        #status { color: #666; margin-bottom: 20px; font-style: italic; }
+        body { background-color: #1a202c; color: #e2e8f0; }
+        .card { background-color: #2d3748; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+        .btn { transition: all 0.2s; }
+        .btn:active { transform: scale(0.95); }
     </style>
 </head>
-<body>
+<body class="min-h-screen p-6">
 
-    <h1>WitMotion Sensor Dashboard</h1>
-    <div id="status">Status: Disconnected</div>
-    <button id="connectBtn">Connect to Sensor</button>
+    <header class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-white">WitMotion <span class="text-blue-500">Pro</span> Dashboard</h1>
+            <p class="text-gray-400 text-sm mt-1">Multi-Sensor Visualization & Analytics</p>
+        </div>
+        <div class="flex gap-4">
+            <button id="addDeviceBtn" class="btn bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold shadow-lg flex items-center">
+                <span class="text-xl mr-2">+</span> Add Sensor
+            </button>
+            <button id="recordBtn" class="btn bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-semibold shadow-lg hidden">
+                Start Recording
+            </button>
+            <button id="exportBtn" class="btn bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold shadow-lg hidden">
+                Export CSV
+            </button>
+        </div>
+    </header>
 
-    <div class="data-container">
-        <div class="card">
-            <h3>Acceleration (g)</h3>
-            <div class="value-row"><span class="label">X:</span> <span id="accX" class="value">0.000</span></div>
-            <div class="value-row"><span class="label">Y:</span> <span id="accY" class="value">0.000</span></div>
-            <div class="value-row"><span class="label">Z:</span> <span id="accZ" class="value">0.000</span></div>
+    <div id="deviceContainer" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         </div>
 
-        <div class="card">
-            <h3>Gyroscope (°/s)</h3>
-            <div class="value-row"><span class="label">X:</span> <span id="gyroX" class="value">0.000</span></div>
-            <div class="value-row"><span class="label">Y:</span> <span id="gyroY" class="value">0.000</span></div>
-            <div class="value-row"><span class="label">Z:</span> <span id="gyroZ" class="value">0.000</span></div>
-        </div>
+    <template id="deviceTemplate">
+        <div class="device-card card relative">
+            <div class="flex justify-between items-start mb-4 border-b border-gray-600 pb-2">
+                <div>
+                    <h2 class="text-xl font-bold text-white device-name" contenteditable="true" title="Click to rename">WT901BLE67</h2>
+                    <span class="text-xs text-gray-400 device-id">ID: 00:00:00...</span>
+                </div>
+                <div class="flex gap-2">
+                    <button class="settings-btn text-gray-400 hover:text-white" title="Settings">⚙️</button>
+                    <button class="calibrate-btn text-gray-400 hover:text-yellow-400" title="Calibrate">⚖️</button>
+                    <button class="disconnect-btn text-gray-400 hover:text-red-500" title="Disconnect">✕</button>
+                </div>
+            </div>
 
-        <div class="card">
-            <h3>Angle (°)</h3>
-            <div class="value-row"><span class="label">X:</span> <span id="angleX" class="value">0.000</span></div>
-            <div class="value-row"><span class="label">Y:</span> <span id="angleY" class="value">0.000</span></div>
-            <div class="value-row"><span class="label">Z:</span> <span id="angleZ" class="value">0.000</span></div>
+            <div class="canvas-container h-64 bg-gray-900 rounded-lg mb-4 relative overflow-hidden border border-gray-700">
+                </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center text-sm font-mono mb-4">
+                <div class="bg-gray-700 p-2 rounded">
+                    <div class="text-gray-400 text-xs">Angle X</div>
+                    <div class="text-blue-400 font-bold val-ang-x">0.00°</div>
+                </div>
+                <div class="bg-gray-700 p-2 rounded">
+                    <div class="text-gray-400 text-xs">Angle Y</div>
+                    <div class="text-blue-400 font-bold val-ang-y">0.00°</div>
+                </div>
+                <div class="bg-gray-700 p-2 rounded">
+                    <div class="text-gray-400 text-xs">Angle Z</div>
+                    <div class="text-blue-400 font-bold val-ang-z">0.00°</div>
+                </div>
+            </div>
+
+            <div class="h-40">
+                <canvas class="device-chart"></canvas>
+            </div>
+
+            <div class="settings-modal absolute inset-0 bg-gray-800/95 z-50 rounded-lg p-6 hidden flex-col justify-center">
+                <h3 class="text-lg font-bold mb-4">Sensor Configuration</h3>
+                
+                <label class="block text-sm mb-2">Return Rate</label>
+                <select class="rate-select w-full bg-gray-700 rounded p-2 mb-4">
+                    <option value="06">10Hz (Default)</option>
+                    <option value="07">20Hz</option>
+                    <option value="08">50Hz</option>
+                    <option value="09">100Hz</option>
+                    <option value="0B">200Hz</option>
+                </select>
+
+                <label class="block text-sm mb-2">Bandwidth</label>
+                <select class="bw-select w-full bg-gray-700 rounded p-2 mb-6">
+                    <option value="04">20Hz (Default)</option>
+                    <option value="01">188Hz</option>
+                    <option value="00">256Hz</option>
+                </select>
+
+                <div class="flex justify-end gap-3">
+                    <button class="close-settings btn bg-gray-600 px-4 py-1 rounded">Close</button>
+                    <button class="save-settings btn bg-blue-600 px-4 py-1 rounded">Apply</button>
+                </div>
+            </div>
         </div>
-    </div>
+    </template>
 
     <script>
-        // UUIDs extracted from your python file
+        // --- CONSTANTS ---
         const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
-        const CHARACTERISTIC_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
+        const READ_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
+        const WRITE_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb";
 
-        const connectBtn = document.getElementById('connectBtn');
-        const statusDisplay = document.getElementById('status');
+        // Global State
+        const devices = new Map(); // Store connected device objects
+        let isRecording = false;
+        let recordingStartTime = 0;
 
-        connectBtn.addEventListener('click', async () => {
+        // --- 1. MULTI-CONNECTION HANDLER ---
+        document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
-                statusDisplay.textContent = "Status: Scanning...";
-                
-                // Request the device
                 const device = await navigator.bluetooth.requestDevice({
-                    // We accept all devices with this specific service UUID
-                    filters: [{ services: [SERVICE_UUID] }],
+                    filters: [{ namePrefix: 'WT901BLE' }], 
                     optionalServices: [SERVICE_UUID]
                 });
 
-                statusDisplay.textContent = "Status: Connecting...";
-                
+                if (devices.has(device.id)) {
+                    alert("Device already connected!");
+                    return;
+                }
+
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
-                const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+                const readChar = await service.getCharacteristic(READ_UUID);
+                const writeChar = await service.getCharacteristic(WRITE_UUID);
 
-                // Start notifications to get streaming data
-                await characteristic.startNotifications();
-                characteristic.addEventListener('characteristicvaluechanged', handleData);
+                // Create UI for this device
+                const ui = createDeviceUI(device);
+                
+                // Store device context
+                const deviceContext = {
+                    device, server, writeChar, ui,
+                    dataLog: [],
+                    lastData: {}
+                };
+                devices.set(device.id, deviceContext);
 
-                statusDisplay.textContent = "Status: Connected & Receiving Data";
-                connectBtn.style.backgroundColor = "#28a745";
-                connectBtn.textContent = "Connected";
+                // Start Data Stream
+                await readChar.startNotifications();
+                readChar.addEventListener('characteristicvaluechanged', (e) => handleData(e, device.id));
 
-                // Handle disconnection
-                device.addEventListener('gattserverdisconnected', () => {
-                    statusDisplay.textContent = "Status: Disconnected";
-                    connectBtn.style.backgroundColor = "#007bff";
-                    connectBtn.textContent = "Connect to Sensor";
-                });
+                // Show Global Controls
+                document.getElementById('recordBtn').classList.remove('hidden');
 
-            } catch (error) {
-                console.error(error);
-                statusDisplay.textContent = "Error: " + error.message;
+            } catch (err) {
+                console.error("Connection failed", err);
             }
         });
 
-        function handleData(event) {
-            const data = event.target.value;
+        // --- 2. CREATE UI CARD ---
+        function createDeviceUI(device) {
+            const template = document.getElementById('deviceTemplate');
+            const clone = template.content.cloneNode(true);
+            const card = clone.querySelector('.device-card');
+            const container = document.getElementById('deviceContainer');
+
+            // Set ID and Name
+            card.dataset.id = device.id;
+            clone.querySelector('.device-name').innerText = device.name || "Unknown Sensor";
+            clone.querySelector('.device-id').innerText = device.id;
+
+            // Setup 3D Scene
+            const canvasContainer = clone.querySelector('.canvas-container');
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ alpha: true });
+            renderer.setSize(canvasContainer.offsetWidth, 256);
+            canvasContainer.appendChild(renderer.domElement);
+
+            // Placeholder Cube (Your Sensor Model)
+            const geometry = new THREE.BoxGeometry(1.5, 0.5, 2); // Roughly sensor shape
+            const material = new THREE.MeshNormalMaterial();
+            const cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
+            camera.position.z = 5;
+
+            // Setup Chart.js
+            const ctx = clone.querySelector('.device-chart').getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(50).fill(''),
+                    datasets: [
+                        { label: 'Roll', data: Array(50).fill(0), borderColor: 'red', borderWidth: 1, pointRadius: 0 },
+                        { label: 'Pitch', data: Array(50).fill(0), borderColor: 'green', borderWidth: 1, pointRadius: 0 },
+                    ]
+                },
+                options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { y: { display: false }, x: { display: false } } }
+            });
+
+            // Bind Settings Buttons
+            clone.querySelector('.settings-btn').addEventListener('click', () => {
+                card.querySelector('.settings-modal').classList.remove('hidden');
+                card.querySelector('.settings-modal').classList.add('flex');
+            });
             
-            // Check for the header 0x55 0x61
-            if (data.byteLength >= 20 && data.getUint8(0) === 0x55 && data.getUint8(1) === 0x61) {
+            clone.querySelector('.close-settings').addEventListener('click', () => {
+                card.querySelector('.settings-modal').classList.add('hidden');
+                card.querySelector('.settings-modal').classList.remove('flex');
+            });
+
+            clone.querySelector('.save-settings').addEventListener('click', () => {
+                const rate = card.querySelector('.rate-select').value;
+                const bw = card.querySelector('.bw-select').value;
+                applySettings(device.id, rate, bw);
+            });
+
+            clone.querySelector('.calibrate-btn').addEventListener('click', () => calibrateSensor(device.id));
+
+            container.appendChild(clone);
+
+            return { scene, camera, renderer, mesh: cube, chart, card };
+        }
+
+        // --- 3. DATA PARSING & VISUALIZATION LOOP ---
+        function handleData(event, deviceId) {
+            const value = event.target.value;
+            const context = devices.get(deviceId);
+            if (!context) return;
+
+            // Header Check (0x55 0x61)
+            if (value.getUint8(0) === 0x55 && value.getUint8(1) === 0x61) {
                 
-                // Helper function to handle signed 16-bit integers
-                const getShort = (byte1, byte2) => {
-                    let val = (byte2 << 8) | byte1;
-                    if (val >= 32768) val -= 65536; // Convert to signed integer
-                    return val;
+                const getShort = (idx) => {
+                    let v = (value.getUint8(idx+1) << 8) | value.getUint8(idx);
+                    return v >= 32768 ? v - 65536 : v;
                 };
 
-                // --- ACCELERATION ---
-                // Formula: raw / 32768 * 16
-                const ax = (getShort(data.getUint8(2), data.getUint8(3)) / 32768 * 16).toFixed(3);
-                const ay = (getShort(data.getUint8(4), data.getUint8(5)) / 32768 * 16).toFixed(3);
-                const az = (getShort(data.getUint8(6), data.getUint8(7)) / 32768 * 16).toFixed(3);
+                const ax = getShort(2) / 32768 * 16;
+                const ay = getShort(4) / 32768 * 16;
+                const az = getShort(6) / 32768 * 16;
+                
+                const angX = getShort(12) / 32768 * 180; // Roll
+                const angY = getShort(14) / 32768 * 180; // Pitch
+                const angZ = getShort(16) / 32768 * 180; // Yaw
 
-                document.getElementById('accX').innerText = ax;
-                document.getElementById('accY').innerText = ay;
-                document.getElementById('accZ').innerText = az;
+                // Update UI Text
+                const ui = context.ui;
+                ui.card.querySelector('.val-ang-x').innerText = angX.toFixed(2) + "°";
+                ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(2) + "°";
+                ui.card.querySelector('.val-ang-z').innerText = angZ.toFixed(2) + "°";
 
-                // --- GYROSCOPE ---
-                // Formula: raw / 32768 * 2000
-                const gx = (getShort(data.getUint8(8), data.getUint8(9)) / 32768 * 2000).toFixed(3);
-                const gy = (getShort(data.getUint8(10), data.getUint8(11)) / 32768 * 2000).toFixed(3);
-                const gz = (getShort(data.getUint8(12), data.getUint8(13)) / 32768 * 2000).toFixed(3);
+                // Update 3D Model
+                if (ui.mesh) {
+                    ui.mesh.rotation.x = angX * (Math.PI / 180);
+                    ui.mesh.rotation.z = angY * (Math.PI / 180); 
+                    ui.mesh.rotation.y = -angZ * (Math.PI / 180);
+                    ui.renderer.render(ui.scene, ui.camera);
+                }
 
-                document.getElementById('gyroX').innerText = gx;
-                document.getElementById('gyroY').innerText = gy;
-                document.getElementById('gyroZ').innerText = gz;
+                // Update Chart (Rolling Window)
+                const chart = ui.chart;
+                chart.data.datasets[0].data.push(angX);
+                chart.data.datasets[1].data.push(angY);
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.shift();
+                chart.update();
 
-                // --- ANGLE ---
-                // Formula: raw / 32768 * 180
-                const angX = (getShort(data.getUint8(14), data.getUint8(15)) / 32768 * 180).toFixed(3);
-                const angY = (getShort(data.getUint8(16), data.getUint8(17)) / 32768 * 180).toFixed(3);
-                const angZ = (getShort(data.getUint8(18), data.getUint8(19)) / 32768 * 180).toFixed(3);
-
-                document.getElementById('angleX').innerText = angX;
-                document.getElementById('angleY').innerText = angY;
-                document.getElementById('angleZ').innerText = angZ;
+                // Recording Logic
+                if (isRecording) {
+                    const timestamp = Date.now() - recordingStartTime;
+                    context.dataLog.push({ timestamp, ax, ay, az, angX, angY, angZ });
+                }
             }
         }
+
+        // --- 4. COMMANDS (SETTINGS & CALIBRATION) ---
+        async function sendCommand(deviceId, commandBytes) {
+            const context = devices.get(deviceId);
+            if (!context) return;
+            try {
+                // Unlock command (required by protocol)
+                await context.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x69, 0x88, 0xB5])); 
+                // Actual command
+                await new Promise(r => setTimeout(r, 20)); // Small delay
+                await context.writeChar.writeValue(new Uint8Array(commandBytes));
+                // Save command
+                await new Promise(r => setTimeout(r, 20));
+                await context.writeChar.writeValue(new Uint8Array([0xFF, 0xAA, 0x00, 0x00, 0x00])); 
+            } catch (e) {
+                console.error("Command failed", e);
+            }
+        }
+
+        function applySettings(deviceId, rateHex, bwHex) {
+            // Rate Command: FF AA 03 [Rate] 00
+            sendCommand(deviceId, [0xFF, 0xAA, 0x03, parseInt(rateHex, 16), 0x00]);
+            // Bandwidth Command: FF AA 1F [BW] 00
+            setTimeout(() => {
+                sendCommand(deviceId, [0xFF, 0xAA, 0x1F, parseInt(bwHex, 16), 0x00]);
+            }, 100);
+        }
+
+        function calibrateSensor(deviceId) {
+            if(confirm("Keep sensor flat and still. Start Acceleration Calibration?")) {
+                // Accel Calib Command: FF AA 01 01 00
+                sendCommand(deviceId, [0xFF, 0xAA, 0x01, 0x01, 0x00]);
+            }
+        }
+
+        // --- 5. RECORDING & EXPORT ---
+        document.getElementById('recordBtn').addEventListener('click', () => {
+            isRecording = !isRecording;
+            const btn = document.getElementById('recordBtn');
+            if (isRecording) {
+                recordingStartTime = Date.now();
+                btn.innerText = "Stop Recording";
+                btn.classList.replace('bg-red-600', 'bg-gray-600');
+                // Clear previous logs
+                devices.forEach(d => d.dataLog = []);
+            } else {
+                btn.innerText = "Start Recording";
+                btn.classList.replace('bg-gray-600', 'bg-red-600');
+                document.getElementById('exportBtn').classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            // Export all connected devices
+            devices.forEach((context, id) => {
+                let csv = "Timestamp,AccX,AccY,AccZ,AngleX,AngleY,AngleZ\n";
+                context.dataLog.forEach(row => {
+                    csv += `${row.timestamp},${row.ax},${row.ay},${row.az},${row.angX},${row.angY},${row.angZ}\n`;
+                });
+                
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Sensor_${id}_Data.csv`;
+                a.click();
+            });
+        });
+
     </script>
 </body>
 </html>
