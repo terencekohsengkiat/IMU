@@ -164,7 +164,7 @@
                 const ctx = { 
                     device, server, writeChar, ui, 
                     dataLog: [], 
-                    isMagCalibrating: false,
+                    isMagCalibrating: false, 
                     magPollInterval: null,
                     battInterval: null
                 };
@@ -173,17 +173,16 @@
                 device.addEventListener('gattserverdisconnected', () => {
                     ui.card.classList.add('opacity-50');
                     ui.card.querySelector('.device-name').innerText += " (Disconnected)";
-                    clearInterval(ctx.battInterval); // Stop polling
+                    clearInterval(ctx.battInterval);
                 });
 
                 await readChar.startNotifications();
                 readChar.addEventListener('characteristicvaluechanged', (e) => handleData(e, device.id));
 
-                // START BATTERY POLLING (Every 30s)
+                // Battery Polling (30s)
                 ctx.battInterval = setInterval(() => {
-                    if(device.gatt.connected) sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x64, 0x00]); // Request Reg 0x64
+                    if(device.gatt.connected) sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x64, 0x00]); 
                 }, 30000);
-                // Initial Poll
                 setTimeout(() => sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x64, 0x00]), 2000);
 
                 document.getElementById('recordBtn').classList.remove('hidden');
@@ -350,17 +349,25 @@
         function handleData(event, id) {
             const val = event.target.value;
             const ctx = devices.get(id);
-            if(!ctx || val.byteLength < 5) return; // Basic check
+            if(!ctx || val.byteLength < 5) return; 
 
             // 1. DATA PACKET (0x61)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61 && val.byteLength >= 20) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 const angX=getS(14)/32768*180, angY=getS(16)/32768*180, angZ=getS(18)/32768*180;
                 
+                // MATHS
                 const pitch = angX * (Math.PI / 180);
                 const roll = -angY * (Math.PI / 180);
                 const yaw = angZ * (Math.PI / 180);
-                const compass = angZ < 0 ? angZ + 360 : angZ;
+                
+                // COMPASS FIX: Invert Z angle so Right Turn = Value Increase
+                // We use -angZ. If -angZ is -10, we add 360 = 350? No.
+                // Standard Z: Right Turn = Decreasing (0 -> -10).
+                // Inverted Z: Right Turn = Increasing (0 -> +10).
+                let compRaw = -angZ;
+                if(compRaw < 0) compRaw += 360;
+                const compass = compRaw % 360;
 
                 ctx.ui.card.querySelector('.val-ang-x').innerText = angX.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(1) + "°";
@@ -381,25 +388,17 @@
                 }
             }
 
-            // 2. BATTERY RESPONSE (0x64) - Check register response
-            // Response format usually: 55 71 [RegL] [RegH] [D0L] [D0H]...
-            // If RegL = 64, data is voltage.
+            // 2. BATTERY (0x64)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x64) {
-                 // Voltage is in bytes 4-5? Check doc. Usually D0L D0H.
-                 // let raw = (val.getUint8(5) << 8) | val.getUint8(4);
-                 // Witmotion: voltage = raw / 100.
-                 // E.g. 396 => 3.96V
                  const raw = (val.getUint8(5) << 8) | val.getUint8(4);
                  const voltage = raw / 100;
-                 // Map 3.5V(0%) to 4.2V(100%)
                  let pct = Math.round((voltage - 3.5) / (4.2 - 3.5) * 100);
                  if(pct < 0) pct = 0; if(pct > 100) pct = 100;
-                 
                  ctx.ui.card.querySelector('.bat-val').innerText = pct + "%";
                  if(pct < 20) ctx.ui.card.querySelector('.battery-indicator').classList.replace('text-slate-400', 'text-red-500');
             }
 
-            // 3. MAG DATA RESPONSE (0x3A)
+            // 3. MAG (0x3A)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x3A) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 const mc = ctx.ui.magChart;
