@@ -119,7 +119,11 @@
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'WT901BLE' }], 
+                    // Option A: Specific filter (Try this if Option B fails)
+                    // filters: [{ namePrefix: 'WT' }], 
+                    
+                    // Option B: Accept ALL devices (Best for troubleshooting)
+                    acceptAllDevices: true,
                     optionalServices: [SERVICE_UUID]
                 });
 
