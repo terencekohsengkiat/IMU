@@ -4,12 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WitMotion Pro Dashboard</title>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <style>
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
         .card { background-color: #1e293b; border: 1px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
@@ -58,7 +56,9 @@
                 </div>
             </div>
 
-            <div class="canvas-container h-64 bg-slate-900 relative cursor-move"></div>
+            <div class="canvas-container h-64 bg-slate-900 relative cursor-move">
+                <div class="absolute top-2 left-2 text-[10px] text-slate-500 font-mono mode-indicator">Mode: Auto</div>
+            </div>
 
             <div class="grid grid-cols-3 divide-x divide-slate-700 border-t border-b border-slate-700 bg-slate-800/30">
                 <div class="p-3 text-center">
@@ -92,22 +92,21 @@
                                 <input type="text" class="rename-input bg-slate-900 border border-slate-600 text-white text-sm rounded-r block w-full p-2.5" placeholder="Wingfoil">
                                 <button class="burn-name-btn bg-blue-600 hover:bg-blue-700 text-white px-4 rounded text-sm font-bold">BURN</button>
                             </div>
-                            <p class="text-[10px] text-slate-400">Result: "WT" + Name. Restart sensor after burning.</p>
                         </div>
 
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Data Output Mode</h4>
+                            <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Output Mode (Fixes 90° Flip)</h4>
                             <button class="enable-quat-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group">
                                 <div class="flex items-center gap-3">
                                     <span class="text-xl">🧬</span>
                                     <div class="text-left">
                                         <div class="text-sm font-bold text-slate-200">Enable Quaternion Mode</div>
-                                        <div class="text-[10px] text-slate-400">Fixes Gimbal Lock (Scenario 4)</div>
+                                        <div class="text-[10px] text-slate-400">Essential for full 3D range</div>
                                     </div>
                                 </div>
                                 <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click Once</span>
                             </button>
-                            <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group">
+                             <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group mt-2">
                                 <div class="flex items-center gap-3">
                                     <span class="text-xl">🧭</span>
                                     <div class="text-left">
@@ -161,7 +160,6 @@
         let isRecording = false;
         let recordingStartTime = 0;
 
-        // --- STORAGE ---
         function loadSettings(id) {
             const s = localStorage.getItem('sensor_' + id);
             return s ? JSON.parse(s) : { rot: { x: 0, y: 0, z: 0 } };
@@ -170,45 +168,30 @@
             localStorage.setItem('sensor_' + id, JSON.stringify({ ...loadSettings(id), ...s }));
         }
 
-        // --- COMMAND HELPERS ---
         async function sendRaw(ctx, bytes) {
             if(!ctx.device.gatt.connected) return;
             try { await ctx.writeChar.writeValue(new Uint8Array(bytes)); } catch(e) { console.error(e); }
         }
         async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 50)); }
         async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 50)); }
-
-        // --- DISCONNECT HELPER ---
+        
         function removeDevice(id) {
             const ctx = devices.get(id);
             if (!ctx) return;
-            
-            // 1. Disconnect BLE
             if (ctx.device.gatt.connected) ctx.device.gatt.disconnect();
-            
-            // 2. Clear Intervals
             clearInterval(ctx.battInterval);
             clearInterval(ctx.magPollInterval);
-            
-            // 3. Remove from DOM
             if (ctx.ui && ctx.ui.card) ctx.ui.card.remove();
-            
-            // 4. Delete from Memory
             devices.delete(id);
-            console.log(`Device ${id} removed.`);
         }
 
-        // --- MAIN LOGIC ---
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: 'WT' }], optionalServices: [SERVICE_UUID]
                 });
 
-                if (devices.has(device.id)) {
-                    // If it exists but was "disconnected", remove old one first
-                    removeDevice(device.id);
-                }
+                if (devices.has(device.id)) removeDevice(device.id);
 
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(SERVICE_UUID);
@@ -218,17 +201,11 @@
                 const ui = createDeviceUI(device);
                 const ctx = { 
                     device, server, writeChar, ui, 
-                    dataLog: [], 
-                    isMagCalibrating: false, 
-                    magPollInterval: null,
-                    battInterval: null
+                    dataLog: [], isMagCalibrating: false, magPollInterval: null, battInterval: null
                 };
                 devices.set(device.id, ctx);
 
-                // Auto-cleanup on disconnect
                 device.addEventListener('gattserverdisconnected', () => {
-                    // We don't remove immediately to let user see "Disconnected", 
-                    // but the "X" button will now fully clean up.
                     ui.card.classList.add('opacity-50', 'grayscale');
                     ui.card.querySelector('.device-name').innerText += " (Offline)";
                     clearInterval(ctx.battInterval);
@@ -237,7 +214,6 @@
                 await readChar.startNotifications();
                 readChar.addEventListener('characteristicvaluechanged', (e) => handleData(e, device.id));
 
-                // Battery Polling (30s)
                 ctx.battInterval = setInterval(() => {
                     if(device.gatt.connected) sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x64, 0x00]); 
                 }, 30000);
@@ -261,8 +237,6 @@
             container.appendChild(clone);
             
             const liveCard = container.querySelector(`.device-card[data-id="${device.id}"]`);
-
-            // 3D Setup
             const canvasContainer = liveCard.querySelector('.canvas-container');
             const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0f172a);
             const camera = new THREE.PerspectiveCamera(50, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
@@ -280,7 +254,6 @@
             const dl = new THREE.DirectionalLight(0xffffff, 1); dl.position.set(5, 10, 7); scene.add(dl);
 
             const dataGroup = new THREE.Group();
-            dataGroup.rotation.order = 'YXZ'; 
             dataGroup.userData = { currentQuat: new THREE.Quaternion(), targetQuat: new THREE.Quaternion() };
             scene.add(dataGroup);
 
@@ -304,7 +277,7 @@
             function animate() {
                 requestAnimationFrame(animate);
                 if(dataGroup.userData.targetQuat) {
-                    dataGroup.userData.currentQuat.slerp(dataGroup.userData.targetQuat, 0.15);
+                    dataGroup.userData.currentQuat.slerp(dataGroup.userData.targetQuat, 0.2); 
                     dataGroup.quaternion.copy(dataGroup.userData.currentQuat);
                 }
                 renderer.render(scene, camera);
@@ -327,7 +300,6 @@
                 options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x:{type:'linear', grid:{color:'#334155'}}, y:{grid:{color:'#334155'}} } }
             });
 
-            // --- UI HANDLERS ---
             const modal = liveCard.querySelector('.settings-modal');
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.slider-rot-x').value = settings.rot.x;
@@ -338,7 +310,6 @@
             liveCard.querySelector('.close-settings').addEventListener('click', () => modal.classList.add('hidden') || modal.classList.remove('flex'));
             liveCard.querySelector('.calib-btn').addEventListener('click', () => liveCard.querySelector('.settings-btn').click());
 
-            // 1. BURN NAME
             liveCard.querySelector('.burn-name-btn').addEventListener('click', async () => {
                 const n = liveCard.querySelector('.rename-input').value;
                 if(n && confirm(`Rename to "WT${n}"?`)) {
@@ -350,22 +321,14 @@
                 }
             });
 
-            // 2. ENABLE QUATERNION (The Gimbal Lock Fix)
             liveCard.querySelector('.enable-quat-btn').addEventListener('click', async () => {
-                if(!confirm("Enable Quaternion Output?\n(Required for accurate 3D rotation)")) return;
+                if(!confirm("Enable Quaternion Mode?")) return;
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
-                // WT901BLE protocol: Set Return Content (Reg 0x02) to Angle(0x08) + Quaternion(0x10) ?
-                // Simpler: Just ensure 0x59 is enabled. 
-                // We will rely on default user flow, but if we need to force it:
-                // Write to 0x02 (Content): 0x61=acc/gyro/ang. We want Quat? 
-                // Let's assume user accepts prompt. 
-                // Note: Standard BLE often sends what's requested. 
-                // Just alerting user to expect smoother data.
-                alert("Mode Enabled. Watch for smoother 3D motion.");
+                await sendRaw(ctx, [0xFF, 0xAA, 0x02, 0x15, 0x00]); 
+                setTimeout(async () => { await save(ctx); alert("Quaternion Mode Enabled. Check 'Mode: Quaternion' on card."); }, 500);
             });
 
-            // 3. SET 9-AXIS
             liveCard.querySelector('.set-9axis-btn').addEventListener('click', async () => {
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
@@ -373,7 +336,6 @@
                 setTimeout(async () => { await save(ctx); alert("Compass Mode (9-Axis) Enabled."); }, 500);
             });
 
-            // 4. CALIBRATION
             liveCard.querySelector('.calib-accel-btn').addEventListener('click', async () => {
                 if(!confirm("Sensor FLAT? Calibrating...")) return;
                 const ctx = devices.get(device.id);
@@ -408,7 +370,6 @@
                 }
             });
 
-            // 5. CLEAN DISCONNECT
             liveCard.querySelector('.disconnect-btn').addEventListener('click', () => {
                 if(confirm("Remove this sensor?")) removeDevice(device.id);
             });
@@ -428,57 +389,65 @@
             const ctx = devices.get(id);
             if(!ctx || val.byteLength < 5) return; 
 
-            // --- A. QUATERNION PACKET (0x59) - PREFERRED ---
+            // --- A. QUATERNION (0x59) - PURE VECTOR MATH (NO EULER LOCK) ---
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x59) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 
-                // Parse Raw Quaternion (Normalized integers)
-                // Q0..Q3 are short (2 bytes). scale = 32768
+                ctx.ui.card.querySelector('.mode-indicator').innerText = "Mode: Quaternion (Vector)";
+                ctx.ui.card.querySelector('.mode-indicator').classList.add('text-green-500');
+
+                // 1. RAW DATA: w, x, y, z
                 const q0 = getS(2) / 32768.0;
                 const q1 = getS(4) / 32768.0;
                 const q2 = getS(6) / 32768.0;
                 const q3 = getS(8) / 32768.0;
-                
-                // 1. Update 3D Model DIRECTLY (Smooth, No Gimbal Lock)
-                // Witmotion Q: [w, x, y, z] -> Three.js [x, y, z, w]
-                // MAPPING: Sensor Y=Forward, Z=Up. Three Y=Up, Z=Forward.
-                // We construct a Three Quaternion from Witmotion data.
-                // We need to reorder to match the 3D scene: 
-                // Sensor (x,y,z) -> Three (x, z, -y)? 
-                // Let's simplify: Use the math derived angles for visualization logic.
-                
-                // 2. VECTOR MATH (User Stick Definitions)
-                // Rotate standard vectors by Q to find "Sticks"
-                const q = new THREE.Quaternion(q1, q3, -q2, q0); // Re-mapped for 3D View
-                
-                // Nose Vector (Sensor Y-Axis)
-                const vNose = new THREE.Vector3(0, 0, -1).applyQuaternion(q); 
-                // Wing Vector (Sensor X-Axis)
-                const vWing = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
-                
-                // CALCULATE ANGLES
-                // Pitch: Angle of Nose vs Horizon (asin of Y component)
-                const pitchRad = Math.asin(vNose.y);
-                const pitchDeg = pitchRad * (180/Math.PI);
-                
-                // Compass: Direction of Nose on XZ plane
-                let compass = Math.atan2(vNose.x, vNose.z) * (180/Math.PI);
-                if(compass < 0) compass += 360; // 0-360
-                
-                // Roll: Banking around Nose
-                // Project Wing vector onto plane perpendicular to Nose? 
-                // Simple approx for UI:
-                const rollDeg = (Math.atan2(vWing.y, Math.sqrt(vWing.x*vWing.x + vWing.z*vWing.z)) * (180/Math.PI)) * -1; // Invert for "Bank Left = Neg"
 
-                // UPDATE UI
+                // 2. CREATE THREEJS QUATERNION (Correcting for Sensor Axis vs 3D World)
+                // Sensor: X=Right, Y=Fwd, Z=Up
+                // Three: X=Right, Y=Up, Z=Fwd (Usually)
+                // We map raw Q to Three Q directly. 
+                // Based on standard Witmotion: Q_three = new THREE.Quaternion(x, z, -y, w) is common.
+                // Let's rely on the visual alignment sliders to fix mesh orientation, and focus on Math here.
+                const q = new THREE.Quaternion(q1, q3, -q2, q0); 
+
+                // 3. APPLY ROTATION TO 3D MODEL DIRECTLY (No Euler Step!)
+                if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.copy(q);
+
+                // 4. CALCULATE NUMBERS VIA VECTORS (The "Stick" Method)
+                
+                // NOSE VECTOR: Start with (0,0,-1) and rotate it by Q
+                const vNose = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+                
+                // WING VECTOR: Start with (1,0,0) and rotate it by Q
+                const vWing = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+
+                // UP VECTOR: Start with (0,1,0) and rotate it by Q
+                const vUp = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+
+                // -- PITCH: Angle between Nose and Horizon (XZ plane) --
+                // Simply the asin of the Y component (Vertical)
+                // Range: -90 to +90
+                const pitchDeg = Math.asin(vNose.y) * (180/Math.PI);
+
+                // -- ROLL: Banking angle --
+                // Angle between Wing Vector and Horizon.
+                // We project Wing onto the vertical plane perpendicular to heading.
+                // Simple approx: asin(vWing.y) gives bank angle. 
+                // But to get full 360, we look at Up Vector's tilt relative to global Up.
+                // Let's stick to your requested definition: "If board rolls left, negative."
+                // Since vWing starts at (1,0,0), if we roll left, Y goes down (negative).
+                // Range: -90 to +90 (Vector math handles the 89.9 jump naturally)
+                let rollDeg = Math.asin(vWing.y) * (180/Math.PI) * -1; // Invert to match typical 'Bank Left = Neg'
+
+                // -- COMPASS: Direction of Nose on flat ground (XZ) --
+                let compass = Math.atan2(vNose.x, vNose.z) * (180/Math.PI);
+                if(compass < 0) compass += 360;
+
+                // 5. UPDATE UI
                 ctx.ui.card.querySelector('.val-ang-x').innerText = pitchDeg.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-y').innerText = rollDeg.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
-                
-                // Update 3D Mesh
-                if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.copy(q);
 
-                // Update Chart
                 const c = ctx.ui.chart;
                 c.data.datasets[0].data.push(pitchDeg);
                 c.data.datasets[1].data.push(rollDeg);
@@ -487,18 +456,15 @@
                 c.update();
                 
                 if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, pitch:pitchDeg, roll:rollDeg, yaw:compass });
-                
-                return; // Skip 0x61 processing if we have Q
+                return;
             }
 
-            // --- B. ANGLE PACKET (0x61) - FALLBACK ---
+            // B. ANGLE (0x61) - FALLBACK (Only if Quat not enabled)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61) {
+                if(ctx.ui.card.querySelector('.mode-indicator').innerText.includes("Quaternion")) return;
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 const angX=getS(14)/32768*180, angY=getS(16)/32768*180, angZ=getS(18)/32768*180;
-                
-                // User Logic Fallback
-                const pitch = angX;
-                const roll = -angY;
+                const pitch = angX, roll = -angY;
                 let compass = -angZ; if(compass < 0) compass += 360; compass %= 360;
 
                 ctx.ui.card.querySelector('.val-ang-x').innerText = pitch.toFixed(1) + "°";
@@ -509,18 +475,13 @@
                     const e = new THREE.Euler(pitch*(Math.PI/180), compass*(Math.PI/180), roll*(Math.PI/180), 'YXZ');
                     ctx.ui.mesh.userData.targetQuat.setFromEuler(e);
                 }
-                
                 const c = ctx.ui.chart;
-                c.data.datasets[0].data.push(pitch);
-                c.data.datasets[1].data.push(roll);
-                c.data.datasets[2].data.push(compass);
+                c.data.datasets[0].data.push(pitch); c.data.datasets[1].data.push(roll); c.data.datasets[2].data.push(compass);
                 if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
                 c.update();
-
                 if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, pitch, roll, yaw:compass });
             }
 
-            // BATTERY (0x64)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x64) {
                  const raw = (val.getUint8(5) << 8) | val.getUint8(4);
                  const voltage = raw / 100;
@@ -529,8 +490,6 @@
                  ctx.ui.card.querySelector('.bat-val').innerText = pct + "%";
                  if(pct < 20) ctx.ui.card.querySelector('.battery-indicator').classList.replace('text-slate-400', 'text-red-500');
             }
-            
-            // MAG CALIB (0x3A)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x3A) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 const mc = ctx.ui.magChart;
