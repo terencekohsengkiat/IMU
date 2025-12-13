@@ -4,16 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WitMotion Pro Dashboard</title>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <style>
         body { background-color: #0f172a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
         .card { background-color: #1e293b; border: 1px solid #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
         .modal-backdrop { background-color: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     </style>
 </head>
 <body class="min-h-screen p-6 flex flex-col">
@@ -24,13 +25,13 @@
             <p class="text-slate-400 text-xs uppercase tracking-wider mt-1">Commercial Sensor Management</p>
         </div>
         <div class="flex gap-3">
-            <button id="addDeviceBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all flex items-center shadow-lg shadow-blue-900/20">
+            <button id="addDeviceBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all flex items-center shadow-lg">
                 <span class="mr-2 text-lg">+</span> Connect Sensor
             </button>
-            <button id="recordBtn" class="hidden bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg shadow-red-900/20 flex items-center">
+            <button id="recordBtn" class="hidden bg-red-600 hover:bg-red-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg flex items-center">
                 <span class="mr-2">●</span> Record
             </button>
-            <button id="exportBtn" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg shadow-emerald-900/20 flex items-center">
+            <button id="exportBtn" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-medium transition-all shadow-lg flex items-center">
                 <span class="mr-2">↓</span> Export CSV
             </button>
         </div>
@@ -47,6 +48,7 @@
                 </div>
                 <div class="flex gap-1">
                     <button class="settings-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors">⚙️</button>
+                    <button class="calib-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-yellow-400 transition-colors">🧭</button>
                     <button class="disconnect-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-red-400 transition-colors">✕</button>
                 </div>
             </div>
@@ -65,22 +67,37 @@
                         <button class="close-settings text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
                     </div>
                     <div class="p-6 overflow-y-auto space-y-8">
+                        
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-blue-400 uppercase tracking-widest border-b border-slate-700 pb-1">Firmware</h4>
+                            <h4 class="text-xs font-bold text-blue-400 uppercase tracking-widest border-b border-slate-700 pb-1">1. Firmware Renaming</h4>
                             <div class="flex gap-2">
                                 <span class="flex items-center px-3 bg-slate-900 border border-slate-600 rounded-l text-slate-500 text-sm">WT</span>
-                                <input type="text" class="rename-input bg-slate-900 border border-slate-600 text-white text-sm rounded-r block w-full p-2.5" placeholder="Name">
-                                <button class="burn-name-btn bg-red-600 hover:bg-red-700 text-white px-4 rounded text-sm font-bold">BURN</button>
+                                <input type="text" class="rename-input bg-slate-900 border border-slate-600 text-white text-sm rounded-r block w-full p-2.5" placeholder="Wingfoil">
+                                <button class="burn-name-btn bg-blue-600 hover:bg-blue-700 text-white px-4 rounded text-sm font-bold">BURN</button>
                             </div>
+                            <p class="text-[10px] text-slate-400">Result will be "WT" + Name. Power Cycle Required.</p>
                         </div>
+
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-yellow-400 uppercase tracking-widest border-b border-slate-700 pb-1">Calibration</h4>
+                            <h4 class="text-xs font-bold text-yellow-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Algorithm & Calibration</h4>
+                            
+                            <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group mb-2">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xl">🧭</span>
+                                    <div class="text-left">
+                                        <div class="text-sm font-bold text-slate-200">Set to 9-Axis (Compass Mode)</div>
+                                        <div class="text-[10px] text-slate-400">Enables Magnetometer for Absolute North</div>
+                                    </div>
+                                </div>
+                                <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click to Set</span>
+                            </button>
+
                             <div class="grid grid-cols-2 gap-4">
                                 <button class="calib-accel-btn bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex flex-col items-center gap-2">
                                     <span class="text-2xl">📏</span><span class="text-sm font-bold text-slate-200">Level Horizon</span>
                                 </button>
                                 <button class="calib-mag-btn bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex flex-col items-center gap-2">
-                                    <span class="text-2xl">🧭</span><span class="text-sm font-bold text-slate-200">Compass Calib</span>
+                                    <span class="text-2xl">🔄</span><span class="text-sm font-bold text-slate-200">Mag Calib</span>
                                 </button>
                             </div>
                             <div class="mag-viz-container hidden bg-black rounded border border-slate-700 p-2">
@@ -88,12 +105,13 @@
                                 <div class="h-48 w-full"><canvas class="mag-scatter-chart"></canvas></div>
                             </div>
                         </div>
+
                         <div class="space-y-3">
-                            <h4 class="text-xs font-bold text-green-400 uppercase tracking-widest border-b border-slate-700 pb-1">3D Offset</h4>
+                            <h4 class="text-xs font-bold text-green-400 uppercase tracking-widest border-b border-slate-700 pb-1">3. Visualization Offset</h4>
                             <div class="space-y-4">
-                                <div><div class="flex justify-between text-xs mb-1"><span>Pitch (X)</span><span class="val-rot-x text-blue-400">0°</span></div><input type="range" class="slider-rot-x w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
-                                <div><div class="flex justify-between text-xs mb-1"><span>Roll (Y)</span><span class="val-rot-y text-blue-400">0°</span></div><input type="range" class="slider-rot-y w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
-                                <div><div class="flex justify-between text-xs mb-1"><span>Yaw (Z)</span><span class="val-rot-z text-blue-400">0°</span></div><input type="range" class="slider-rot-z w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
+                                <div><div class="flex justify-between text-xs mb-1"><span>Pitch Offset (X)</span><span class="val-rot-x text-blue-400">0°</span></div><input type="range" class="slider-rot-x w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
+                                <div><div class="flex justify-between text-xs mb-1"><span>Roll Offset (Y)</span><span class="val-rot-y text-blue-400">0°</span></div><input type="range" class="slider-rot-y w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
+                                <div><div class="flex justify-between text-xs mb-1"><span>Yaw Offset (Z)</span><span class="val-rot-z text-blue-400">0°</span></div><input type="range" class="slider-rot-z w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer" min="0" max="360" value="0"></div>
                             </div>
                         </div>
                     </div>
@@ -122,16 +140,15 @@
             localStorage.setItem('sensor_' + id, JSON.stringify({ ...loadSettings(id), ...s }));
         }
 
-        // --- COMMAND HELPERS (THE FIX) ---
+        // --- COMMAND HELPERS ---
         async function sendRaw(ctx, bytes) {
             if(!ctx.device.gatt.connected) return;
             try { await ctx.writeChar.writeValue(new Uint8Array(bytes)); } catch(e) { console.error(e); }
         }
-
         async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 50)); }
         async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 50)); }
 
-        // --- CONNECTION ---
+        // --- MAIN LOGIC ---
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
@@ -151,7 +168,6 @@
                 device.addEventListener('gattserverdisconnected', () => {
                     ui.card.classList.add('opacity-50');
                     ui.card.querySelector('.device-name').innerText += " (Disconnected)";
-                    ui.card.querySelector('.disconnect-btn').innerText = "♻";
                 });
 
                 await readChar.startNotifications();
@@ -242,7 +258,7 @@
                 options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x:{type:'linear', grid:{color:'#334155'}}, y:{grid:{color:'#334155'}} } }
             });
 
-            // Logic
+            // --- SETTINGS BINDINGS ---
             const modal = liveCard.querySelector('.settings-modal');
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.slider-rot-x').value = settings.rot.x;
@@ -251,32 +267,40 @@
                 modal.classList.remove('hidden'); modal.classList.add('flex');
             });
             liveCard.querySelector('.close-settings').addEventListener('click', () => modal.classList.add('hidden') || modal.classList.remove('flex'));
-            liveCard.querySelector('.disconnect-btn').addEventListener('click', () => {
-                if(device.gatt.connected) device.gatt.disconnect();
-                else document.getElementById('addDeviceBtn').click(); // Retry logic
-            });
-
-            liveCard.querySelector('.burn-name-btn').addEventListener('click', () => {
+            
+            // 1. BURN NAME
+            liveCard.querySelector('.burn-name-btn').addEventListener('click', async () => {
                 const n = liveCard.querySelector('.rename-input').value;
-                if(n && confirm(`Rename to WT${n}?`)) {
+                if(n && confirm(`Rename to "WT${n}"? (Power cycle required)`)) {
                     const ctx = devices.get(device.id);
-                    unlock(ctx).then(() => sendRaw(ctx, new TextEncoder().encode("WT" + n + "\r\n"))).then(() => save(ctx));
-                    alert("Name sent. Restart sensor.");
+                    await unlock(ctx);
+                    // Protocol: "WT" header + "WT" prefix + Name + \r\n
+                    const cmd = "WT" + "WT" + n + "\r\n";
+                    await sendRaw(ctx, new TextEncoder().encode(cmd));
+                    await save(ctx);
+                    alert("Name Sent! PLEASE RESTART SENSOR NOW.");
                 }
             });
 
+            // 2. SET 9-AXIS MODE
+            liveCard.querySelector('.set-9axis-btn').addEventListener('click', async () => {
+                if(!confirm("Enable 9-Axis Mode? (Uses Magnetometer for Absolute Compass)")) return;
+                const ctx = devices.get(device.id);
+                await unlock(ctx);
+                await sendRaw(ctx, [0xFF, 0xAA, 0x24, 0x00, 0x00]); // 0x24=Algorithm, 0x00=9-Axis
+                setTimeout(async () => {
+                    await save(ctx);
+                    alert("9-Axis Mode Enabled. Compass should now work.");
+                }, 500);
+            });
+
+            // 3. CALIBRATION
             liveCard.querySelector('.calib-accel-btn').addEventListener('click', async () => {
                 if(!confirm("Sensor FLAT? Calibrating (Wait 5s)...")) return;
                 const ctx = devices.get(device.id);
-                const btn = liveCard.querySelector('.calib-accel-btn');
-                btn.innerText = "⏳ Calibrating...";
                 await unlock(ctx);
-                await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x01, 0x00]); // Start
-                setTimeout(async () => {
-                    await save(ctx); // Save after delay
-                    btn.innerText = "✅ Done! (Level Horizon)";
-                    setTimeout(() => btn.innerText = "Level Horizon", 2000);
-                }, 5000); // 5 Second Delay
+                await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x01, 0x00]); 
+                setTimeout(async () => { await save(ctx); alert("Accel Calibrated."); }, 5000);
             });
 
             liveCard.querySelector('.calib-mag-btn').addEventListener('click', async (e) => {
@@ -287,7 +311,7 @@
                 if(!ctx.isMagCalibrating) {
                     if(!confirm("Start Compass Calibration? Rotate 360° on all axes.")) return;
                     await unlock(ctx);
-                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x07, 0x00]); // Start
+                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x07, 0x00]); // Start Mag
                     ctx.isMagCalibrating = true;
                     btn.classList.replace('bg-slate-700', 'bg-green-600');
                     btn.querySelector('span:nth-child(2)').innerText = "FINISH (Save)";
@@ -296,15 +320,14 @@
                 } else {
                     clearInterval(ctx.magPollInterval);
                     await unlock(ctx);
-                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x00, 0x00]); // End
+                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x00, 0x00]); // End Mag
                     setTimeout(async () => {
-                        await save(ctx); // Patient Save
-                        alert("Calibration Saved.");
+                        await save(ctx);
+                        alert("Mag Calibration Saved.");
                     }, 500);
-                    
                     ctx.isMagCalibrating = false;
                     btn.classList.replace('bg-green-600', 'bg-slate-700');
-                    btn.querySelector('span:nth-child(2)').innerText = "Compass Calib";
+                    btn.querySelector('span:nth-child(2)').innerText = "Mag Calib";
                     viz.classList.add('hidden');
                     magChart.data.datasets[0].data = []; magChart.update();
                 }
