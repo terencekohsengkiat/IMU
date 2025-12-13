@@ -381,8 +381,8 @@
                 if (ui.mesh && ui.mesh.userData.targetQuat) {
                     // Convert Degrees to Radians
                     const pitch = angX * (Math.PI / 180);
-                    const roll = angY * (Math.PI / 180); 
-                    const yaw = -angZ * (Math.PI / 180); // Negative to match standard compass rotation (Right = Clockwise)
+                    const roll = -angY * (Math.PI / 180); 
+                    const yaw = angZ * (Math.PI / 180); // Negative to match standard compass rotation (Right = Clockwise)
 
                     // Create Euler with specific order to prevent gimbal lock artifacts
                     // YXZ is often better for Yaw-based rotations
