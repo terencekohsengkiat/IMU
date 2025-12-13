@@ -110,7 +110,7 @@
         const READ_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
         const WRITE_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb";
 
-        // Import OrbitControls from CDN (Required for mouse interaction)
+        // Import OrbitControls
         import("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js")
             .then(module => { window.OrbitControls = module.OrbitControls; });
 
@@ -123,6 +123,7 @@
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
+                    // Filter for devices starting with "WT" (Works for WT[1]..., WT901...)
                     filters: [{ namePrefix: 'WT' }],
                     optionalServices: [SERVICE_UUID]
                 });
@@ -156,7 +157,7 @@
             }
         });
 
-        // --- 2. CREATE UI CARD (WITH ALIGNMENT CONTROLS) ---
+        // --- 2. CREATE UI CARD ---
         function createDeviceUI(device) {
             const template = document.getElementById('deviceTemplate');
             const clone = template.content.cloneNode(true);
@@ -167,8 +168,7 @@
             clone.querySelector('.device-name').innerText = device.name || "Unknown Sensor";
             clone.querySelector('.device-id').innerText = device.id;
 
-            // --- INJECT SETTINGS UI ---
-            // We are adding Rotation Sliders to the existing settings modal
+            // --- INJECT ALIGNMENT CONTROLS ---
             const settingsBody = clone.querySelector('.settings-modal');
             const rotationControls = document.createElement('div');
             rotationControls.innerHTML = `
@@ -176,15 +176,12 @@
                 <div class="grid grid-cols-1 gap-2 mb-4">
                     <label class="text-xs">Rotation X: <span class="val-rot-x">0</span>°</label>
                     <input type="range" class="slider-rot-x w-full" min="0" max="360" value="0">
-                    
                     <label class="text-xs">Rotation Y: <span class="val-rot-y">0</span>°</label>
                     <input type="range" class="slider-rot-y w-full" min="0" max="360" value="0">
-                    
                     <label class="text-xs">Rotation Z: <span class="val-rot-z">0</span>°</label>
                     <input type="range" class="slider-rot-z w-full" min="0" max="360" value="0">
                 </div>
             `;
-            // Insert before the buttons
             settingsBody.insertBefore(rotationControls, settingsBody.lastElementChild);
 
             container.appendChild(clone);
@@ -200,7 +197,7 @@
             renderer.setSize(canvasContainer.offsetWidth, 256);
             canvasContainer.appendChild(renderer.domElement);
 
-            // --- AUTO-RESIZER ---
+            // Auto-Resizer
             const resizeObserver = new ResizeObserver(() => {
                 const width = canvasContainer.clientWidth;
                 const height = canvasContainer.clientHeight;
@@ -223,13 +220,14 @@
             dirLight.position.set(5, 10, 7);
             scene.add(dirLight);
 
-            // --- HIERARCHY FOR ALIGNMENT ---
-            // 1. DataGroup: Rotated by the SENSOR DATA
-            // 2. AlignmentGroup: Rotated by the USER SLIDERS (inside DataGroup)
-            // 3. Model: The actual mesh (inside AlignmentGroup)
+            // --- DATA GROUP (Rotated by Sensor) ---
             const dataGroup = new THREE.Group();
+            dataGroup.rotation.order = 'ZYX'; // FIX: Match Sensor Rotation Order
+            // Store "Target" rotation for smoothing
+            dataGroup.userData = { targetRot: { x: 0, y: 0, z: 0 } };
             scene.add(dataGroup);
 
+            // --- ALIGNMENT GROUP (Rotated by User Sliders) ---
             const alignmentGroup = new THREE.Group();
             dataGroup.add(alignmentGroup);
 
@@ -241,18 +239,7 @@
             loader.load(
                 'assets/sensor.obj', 
                 function (object) {
-                    console.log("Model Loaded!");
-                    pivot.remove(placeholder);
-                    
-                    // --- FIX 1: SET ROTATION ORDER TO MATCH SENSOR (ZYX) ---
-                    object.rotation.order = 'ZYX'; 
-
-                    // --- FIX 2: PREPARE FOR SMOOTHING ---
-                    // We store the "Target" (where the sensor IS) separate from the "Current" (where the model IS)
-                    object.userData = { 
-                        targetRot: { x: 0, y: 0, z: 0 } 
-                    };
-
+                    console.log("Model Loaded for " + device.name);
                     const box = new THREE.Box3().setFromObject(object);
                     const size = new THREE.Vector3();
                     box.getSize(size);
@@ -264,38 +251,61 @@
                     object.position.sub(center);
 
                     object.traverse((child) => {
-                        if (child.isMesh) {
-                            child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 });
-                        }
+                        if (child.isMesh) child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 });
                     });
 
-                    // Assign to global UI mesh so we can control it
-                    ui.mesh = object;
-                    pivot.add(object);
+                    alignmentGroup.add(object);
+                },
+                undefined,
+                function (error) {
+                    console.warn("Model failed, using cube.");
+                    const geo = new THREE.BoxGeometry(1.5, 0.5, 2);
+                    const mat = new THREE.MeshPhongMaterial({ color: 0xff4444 });
+                    const cube = new THREE.Mesh(geo, mat);
+                    alignmentGroup.add(cube);
                 }
             );
 
-            // --- ANIMATION LOOP (WITH SMOOTHING) ---
+            // --- SMOOTH ANIMATION LOOP ---
             function animate() {
                 requestAnimationFrame(animate);
                 
-                // If the model is loaded, smooth the rotation
-                if (ui.mesh && ui.mesh.userData.targetRot) {
-                    // "0.1" is the smoothing factor. 
-                    // 0.05 = Very slow/smooth, 0.5 = Fast/snappy
-                    const smoothing = 0.15; 
-
-                    ui.mesh.rotation.x += (ui.mesh.userData.targetRot.x - ui.mesh.rotation.x) * smoothing;
-                    ui.mesh.rotation.y += (ui.mesh.userData.targetRot.y - ui.mesh.rotation.y) * smoothing;
-                    ui.mesh.rotation.z += (ui.mesh.userData.targetRot.z - ui.mesh.rotation.z) * smoothing;
+                // Linear Interpolation (Lerp) for smoothness
+                // We access 'dataGroup' directly because it is in the local scope
+                const smoothing = 0.15; // Adjust 0.01 (slow) to 1.0 (instant)
+                
+                if (dataGroup.userData.targetRot) {
+                    dataGroup.rotation.x += (dataGroup.userData.targetRot.x - dataGroup.rotation.x) * smoothing;
+                    dataGroup.rotation.y += (dataGroup.userData.targetRot.y - dataGroup.rotation.y) * smoothing;
+                    dataGroup.rotation.z += (dataGroup.userData.targetRot.z - dataGroup.rotation.z) * smoothing;
                 }
 
                 renderer.render(scene, camera);
             }
             animate();
 
+            // --- CHART ---
+            const ctx = liveCard.querySelector('.device-chart').getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(50).fill(''),
+                    datasets: [
+                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Yaw', data: Array(50).fill(0), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 }
+                    ]
+                },
+                options: { 
+                    animation: false, 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    scales: { y: { display: true, grid: { color: '#4b5563' } }, x: { display: false } },
+                    plugins: { legend: { display: true, labels: { color: 'white' } } }
+                }
+            });
+
             // --- UI BINDINGS ---
-            // Settings Toggle
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.settings-modal').classList.remove('hidden');
                 liveCard.querySelector('.settings-modal').classList.add('flex');
@@ -304,46 +314,38 @@
                 liveCard.querySelector('.settings-modal').classList.add('hidden');
                 liveCard.querySelector('.settings-modal').classList.remove('flex');
             });
-
-            // Apply Rate/Bandwidth
             liveCard.querySelector('.save-settings').addEventListener('click', () => {
                 const rate = liveCard.querySelector('.rate-select').value;
                 const bw = liveCard.querySelector('.bw-select').value;
                 applySettings(device.id, rate, bw);
-                // Also close modal
                 liveCard.querySelector('.settings-modal').classList.add('hidden');
                 liveCard.querySelector('.settings-modal').classList.remove('flex');
             });
-
-            // Calibration
             liveCard.querySelector('.calibrate-btn').addEventListener('click', () => calibrateSensor(device.id));
 
-            // ALIGNMENT SLIDERS Logic
+            // Alignment Sliders
             const updateAlignment = () => {
                 const rx = liveCard.querySelector('.slider-rot-x').value;
                 const ry = liveCard.querySelector('.slider-rot-y').value;
                 const rz = liveCard.querySelector('.slider-rot-z').value;
                 
-                // Update Text
                 liveCard.querySelector('.val-rot-x').innerText = rx;
                 liveCard.querySelector('.val-rot-y').innerText = ry;
                 liveCard.querySelector('.val-rot-z').innerText = rz;
 
-                // Update 3D Object Rotation (Convert to Radians)
                 alignmentGroup.rotation.x = rx * (Math.PI / 180);
                 alignmentGroup.rotation.y = ry * (Math.PI / 180);
                 alignmentGroup.rotation.z = rz * (Math.PI / 180);
             };
-
             liveCard.querySelector('.slider-rot-x').addEventListener('input', updateAlignment);
             liveCard.querySelector('.slider-rot-y').addEventListener('input', updateAlignment);
             liveCard.querySelector('.slider-rot-z').addEventListener('input', updateAlignment);
 
-            // Note: We return 'dataGroup' as the mesh to be rotated by sensor data
+            // We return 'mesh' as dataGroup so handleData can update the TARGET
             return { scene, camera, renderer, mesh: dataGroup, chart, card: liveCard };
         }
 
-        // --- 3. DATA PARSING (CORRECTED INDICES) ---
+        // --- 3. DATA PARSING ---
         function handleData(event, deviceId) {
             const value = event.target.value;
             const context = devices.get(deviceId);
@@ -360,7 +362,6 @@
                 const ay = getShort(4) / 32768 * 16;
                 const az = getShort(6) / 32768 * 16;
                 
-                // CORRECTED INDICES
                 const angX = getShort(14) / 32768 * 180; 
                 const angY = getShort(16) / 32768 * 180; 
                 const angZ = getShort(18) / 32768 * 180; 
@@ -371,10 +372,9 @@
                 ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(2) + "°";
                 ui.card.querySelector('.val-ang-z').innerText = angZ.toFixed(2) + "°";
 
-                // Update 3D Model Targets (Don't set rotation directly!)
+                // Update 3D Target (NOT Rotation directly)
+                // We update the 'targetRot' property we created on the mesh
                 if (ui.mesh && ui.mesh.userData.targetRot) {
-                    // We just tell the model where it SHOULD be. 
-                    // The animate() loop handles the smooth movement.
                     ui.mesh.userData.targetRot.x = angX * (Math.PI / 180);
                     ui.mesh.userData.targetRot.z = -angY * (Math.PI / 180); 
                     ui.mesh.userData.targetRot.y = -angZ * (Math.PI / 180);
