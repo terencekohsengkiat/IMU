@@ -73,7 +73,7 @@
                 </div>
             </div>
 
-            <div class="h-40">
+            <div class="h-40 relative w-full">
                 <canvas class="device-chart"></canvas>
             </div>
 
@@ -119,10 +119,7 @@
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    // Option A: Specific filter (Try this if Option B fails)
-                    // filters: [{ namePrefix: 'WT' }], 
-                    
-                    // Option B: Accept ALL devices (Best for troubleshooting)
+                    // Search for ALL devices so you can find the correct name
                     acceptAllDevices: true,
                     optionalServices: [SERVICE_UUID]
                 });
@@ -160,7 +157,7 @@
             }
         });
 
-        // --- 2. CREATE UI CARD (UPDATED FOR 3D MODEL) ---
+        // --- 2. CREATE UI CARD ---
         function createDeviceUI(device) {
             const template = document.getElementById('deviceTemplate');
             const clone = template.content.cloneNode(true);
@@ -172,15 +169,20 @@
             clone.querySelector('.device-name').innerText = device.name || "Unknown Sensor";
             clone.querySelector('.device-id').innerText = device.id;
 
+            // *** CRITICAL FIX: Append to DOM BEFORE creating Chart/ThreeJS ***
+            container.appendChild(clone);
+            // Now the elements are "live" on the screen, so we can select them safely.
+            const liveCard = container.querySelector(`.device-card[data-id="${device.id}"]`);
+
             // Setup 3D Scene
-            const canvasContainer = clone.querySelector('.canvas-container');
+            const canvasContainer = liveCard.querySelector('.canvas-container');
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(75, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(canvasContainer.offsetWidth, 256);
             canvasContainer.appendChild(renderer.domElement);
 
-            // --- LIGHTING (Required for imported models) ---
+            // --- LIGHTING ---
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -188,33 +190,29 @@
             scene.add(dirLight);
 
             // --- PIVOT GROUP ---
-            // We rotate this 'pivot' group instead of the model directly.
-            // This allows us to swap the model (cube -> obj) without breaking the rotation logic.
             const pivot = new THREE.Group();
             scene.add(pivot);
             camera.position.z = 5;
 
-            // 1. Add Placeholder Cube (Instant visual feedback)
+            // 1. Add Placeholder Cube (Immediate Visual)
             const geometry = new THREE.BoxGeometry(1.5, 0.5, 2);
             const material = new THREE.MeshNormalMaterial();
             const placeholder = new THREE.Mesh(geometry, material);
             pivot.add(placeholder);
 
-            // 2. Load .OBJ File (Asynchronous)
+            // 2. Load .OBJ File (Try to load user model)
             const loader = new THREE.OBJLoader();
             loader.load(
-                'assets/sensor.obj', // Make sure your file in GitHub is named exactly this
+                'assets/sensor.obj', 
                 function (object) {
-                    // Remove placeholder
-                    pivot.remove(placeholder);
+                    pivot.remove(placeholder); // Success! Remove cube.
                     
-                    // Normalize Scale (Commercial grade polish)
-                    // This ensures massive or tiny models fit nicely in the view
+                    // Normalize Scale
                     const box = new THREE.Box3().setFromObject(object);
                     const size = new THREE.Vector3();
                     box.getSize(size);
                     const maxDim = Math.max(size.x, size.y, size.z);
-                    const scaleFactor = 3 / maxDim; // Scale to fit in a 3-unit space
+                    const scaleFactor = 3 / maxDim; 
                     object.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
                     // Center the model
@@ -222,30 +220,28 @@
                     const center = box.getCenter(new THREE.Vector3());
                     object.position.sub(center);
 
-                    // Apply a nice material
+                    // Apply material
                     object.traverse((child) => {
-                        if (child.isMesh) {
-                            child.material = new THREE.MeshNormalMaterial();
-                        }
+                        if (child.isMesh) child.material = new THREE.MeshNormalMaterial();
                     });
 
                     pivot.add(object);
                 },
-                undefined, // Progress callback
+                undefined,
                 function (error) {
-                    console.warn("Model failed to load, keeping placeholder.", error);
+                    console.log("Using placeholder cube (Custom model not found or error).");
                 }
             );
 
             // Setup Chart.js
-            const ctx = clone.querySelector('.device-chart').getContext('2d');
+            const ctx = liveCard.querySelector('.device-chart').getContext('2d');
             const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: Array(50).fill(''),
                     datasets: [
-                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 1, pointRadius: 0 }, // Red
-                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 1, pointRadius: 0 }, // Green
+                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 1, pointRadius: 0 },
+                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 1, pointRadius: 0 },
                     ]
                 },
                 options: { 
@@ -253,7 +249,7 @@
                     responsive: true, 
                     maintainAspectRatio: false, 
                     scales: { 
-                        y: { display: true, grid: { color: '#4b5563' } }, // Show Y axis grid
+                        y: { display: true, grid: { color: '#4b5563' } }, 
                         x: { display: false } 
                     },
                     plugins: { legend: { display: false } }
@@ -261,28 +257,25 @@
             });
 
             // Bind Settings Buttons
-            clone.querySelector('.settings-btn').addEventListener('click', () => {
-                card.querySelector('.settings-modal').classList.remove('hidden');
-                card.querySelector('.settings-modal').classList.add('flex');
+            liveCard.querySelector('.settings-btn').addEventListener('click', () => {
+                liveCard.querySelector('.settings-modal').classList.remove('hidden');
+                liveCard.querySelector('.settings-modal').classList.add('flex');
             });
             
-            clone.querySelector('.close-settings').addEventListener('click', () => {
-                card.querySelector('.settings-modal').classList.add('hidden');
-                card.querySelector('.settings-modal').classList.remove('flex');
+            liveCard.querySelector('.close-settings').addEventListener('click', () => {
+                liveCard.querySelector('.settings-modal').classList.add('hidden');
+                liveCard.querySelector('.settings-modal').classList.remove('flex');
             });
 
-            clone.querySelector('.save-settings').addEventListener('click', () => {
-                const rate = card.querySelector('.rate-select').value;
-                const bw = card.querySelector('.bw-select').value;
+            liveCard.querySelector('.save-settings').addEventListener('click', () => {
+                const rate = liveCard.querySelector('.rate-select').value;
+                const bw = liveCard.querySelector('.bw-select').value;
                 applySettings(device.id, rate, bw);
             });
 
-            clone.querySelector('.calibrate-btn').addEventListener('click', () => calibrateSensor(device.id));
+            liveCard.querySelector('.calibrate-btn').addEventListener('click', () => calibrateSensor(device.id));
 
-            container.appendChild(clone);
-
-            // Return 'pivot' as the mesh to rotate in handleData
-            return { scene, camera, renderer, mesh: pivot, chart, card };
+            return { scene, camera, renderer, mesh: pivot, chart, card: liveCard };
         }
 
         // --- 3. DATA PARSING & VISUALIZATION LOOP ---
