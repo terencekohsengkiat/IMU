@@ -156,7 +156,7 @@
             }
         });
 
-        // --- 2. CREATE UI CARD ---
+        // --- 2. CREATE UI CARD (WITH ALIGNMENT CONTROLS) ---
         function createDeviceUI(device) {
             const template = document.getElementById('deviceTemplate');
             const clone = template.content.cloneNode(true);
@@ -167,35 +167,52 @@
             clone.querySelector('.device-name').innerText = device.name || "Unknown Sensor";
             clone.querySelector('.device-id').innerText = device.id;
 
+            // --- INJECT SETTINGS UI ---
+            // We are adding Rotation Sliders to the existing settings modal
+            const settingsBody = clone.querySelector('.settings-modal');
+            const rotationControls = document.createElement('div');
+            rotationControls.innerHTML = `
+                <h4 class="text-sm font-bold text-gray-400 mt-4 mb-2">3D Model Alignment</h4>
+                <div class="grid grid-cols-1 gap-2 mb-4">
+                    <label class="text-xs">Rotation X: <span class="val-rot-x">0</span>°</label>
+                    <input type="range" class="slider-rot-x w-full" min="0" max="360" value="0">
+                    
+                    <label class="text-xs">Rotation Y: <span class="val-rot-y">0</span>°</label>
+                    <input type="range" class="slider-rot-y w-full" min="0" max="360" value="0">
+                    
+                    <label class="text-xs">Rotation Z: <span class="val-rot-z">0</span>°</label>
+                    <input type="range" class="slider-rot-z w-full" min="0" max="360" value="0">
+                </div>
+            `;
+            // Insert before the buttons
+            settingsBody.insertBefore(rotationControls, settingsBody.lastElementChild);
+
             container.appendChild(clone);
             const liveCard = container.querySelector(`.device-card[data-id="${device.id}"]`);
 
             // --- 3D SCENE SETUP ---
             const canvasContainer = liveCard.querySelector('.canvas-container');
             const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x111827); // Dark gray background to match theme
+            scene.background = new THREE.Color(0x111827);
 
             const camera = new THREE.PerspectiveCamera(50, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(canvasContainer.offsetWidth, 256);
             canvasContainer.appendChild(renderer.domElement);
-            
+
+            // --- AUTO-RESIZER ---
             const resizeObserver = new ResizeObserver(() => {
                 const width = canvasContainer.clientWidth;
                 const height = canvasContainer.clientHeight;
-                
                 if (width > 0 && height > 0) {
-                    // Update Renderer
-                    renderer.setSize(width, height, false); // false prevents style overwrites
-                    
-                    // Update Camera Lens
+                    renderer.setSize(width, height, false);
                     camera.aspect = width / height;
                     camera.updateProjectionMatrix();
                 }
             });
             resizeObserver.observe(canvasContainer);
 
-            // Add Axes Helper (Red=X, Green=Y, Blue=Z) - VISUAL DEBUGGING
+            // Visual Helpers
             const axesHelper = new THREE.AxesHelper(3);
             scene.add(axesHelper);
 
@@ -206,27 +223,24 @@
             dirLight.position.set(5, 10, 7);
             scene.add(dirLight);
 
-            // Pivot Group (The object we rotate)
-            const pivot = new THREE.Group();
-            scene.add(pivot);
-            camera.position.set(3, 2, 5); // Offset camera so we look AT the center
+            // --- HIERARCHY FOR ALIGNMENT ---
+            // 1. DataGroup: Rotated by the SENSOR DATA
+            // 2. AlignmentGroup: Rotated by the USER SLIDERS (inside DataGroup)
+            // 3. Model: The actual mesh (inside AlignmentGroup)
+            const dataGroup = new THREE.Group();
+            scene.add(dataGroup);
+
+            const alignmentGroup = new THREE.Group();
+            dataGroup.add(alignmentGroup);
+
+            camera.position.set(3, 2, 5); 
             camera.lookAt(0, 0, 0);
 
-            // 1. Add Placeholder Cube (Red)
-            const geometry = new THREE.BoxGeometry(1.5, 0.5, 2);
-            const material = new THREE.MeshPhongMaterial({ color: 0xff4444, wireframe: false });
-            const placeholder = new THREE.Mesh(geometry, material);
-            pivot.add(placeholder);
-
-            // 2. Load .OBJ File
+            // Load Model
             const loader = new THREE.OBJLoader();
             loader.load(
                 'assets/sensor.obj', 
                 function (object) {
-                    console.log("Model Loaded Successfully!");
-                    pivot.remove(placeholder); // Remove red cube
-                    
-                    // Normalize Scale
                     const box = new THREE.Box3().setFromObject(object);
                     const size = new THREE.Vector3();
                     box.getSize(size);
@@ -234,60 +248,55 @@
                     const scaleFactor = 3 / maxDim; 
                     object.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-                    // Center
-                    box.setFromObject(object);
                     const center = box.getCenter(new THREE.Vector3());
                     object.position.sub(center);
 
-                    // Material Fix (Make it Blue)
                     object.traverse((child) => {
-                        if (child.isMesh) {
-                            child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 });
-                        }
+                        if (child.isMesh) child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 });
                     });
 
-                    pivot.add(object);
+                    alignmentGroup.add(object);
                 },
                 undefined,
                 function (error) {
-                    console.warn("3D Model failed to load. Keeping placeholder.", error);
+                    // Fallback Cube
+                    const geo = new THREE.BoxGeometry(1.5, 0.5, 2);
+                    const mat = new THREE.MeshPhongMaterial({ color: 0xff4444 });
+                    const cube = new THREE.Mesh(geo, mat);
+                    alignmentGroup.add(cube);
                 }
             );
 
-            // --- ANIMATION LOOP (Crucial for visibility) ---
+            // Animation
             function animate() {
                 requestAnimationFrame(animate);
                 renderer.render(scene, camera);
             }
             animate();
 
-            // --- CHART SETUP ---
+            // --- CHART ---
             const ctx = liveCard.querySelector('.device-chart').getContext('2d');
             const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: Array(50).fill(''),
                     datasets: [
-                        { label: 'Roll (X)', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0 },
-                        { label: 'Pitch (Y)', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0 },
-                        { label: 'Yaw (Z)', data: Array(50).fill(0), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 }
+                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0 },
+                        { label: 'Yaw', data: Array(50).fill(0), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 }
                     ]
                 },
                 options: { 
                     animation: false, 
                     responsive: true, 
                     maintainAspectRatio: false, 
-                    scales: { 
-                        y: { display: true, grid: { color: '#4b5563' } }, 
-                        x: { display: false } 
-                    },
-                    plugins: { 
-                        legend: { display: true, labels: { color: 'white' } }
-                    }
+                    scales: { y: { display: true, grid: { color: '#4b5563' } }, x: { display: false } },
+                    plugins: { legend: { display: true, labels: { color: 'white' } } }
                 }
             });
 
-            // UI Bindings
+            // --- UI BINDINGS ---
+            // Settings Toggle
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.settings-modal').classList.remove('hidden');
                 liveCard.querySelector('.settings-modal').classList.add('flex');
@@ -296,14 +305,43 @@
                 liveCard.querySelector('.settings-modal').classList.add('hidden');
                 liveCard.querySelector('.settings-modal').classList.remove('flex');
             });
+
+            // Apply Rate/Bandwidth
             liveCard.querySelector('.save-settings').addEventListener('click', () => {
                 const rate = liveCard.querySelector('.rate-select').value;
                 const bw = liveCard.querySelector('.bw-select').value;
                 applySettings(device.id, rate, bw);
+                // Also close modal
+                liveCard.querySelector('.settings-modal').classList.add('hidden');
+                liveCard.querySelector('.settings-modal').classList.remove('flex');
             });
+
+            // Calibration
             liveCard.querySelector('.calibrate-btn').addEventListener('click', () => calibrateSensor(device.id));
 
-            return { scene, camera, renderer, mesh: pivot, chart, card: liveCard };
+            // ALIGNMENT SLIDERS Logic
+            const updateAlignment = () => {
+                const rx = liveCard.querySelector('.slider-rot-x').value;
+                const ry = liveCard.querySelector('.slider-rot-y').value;
+                const rz = liveCard.querySelector('.slider-rot-z').value;
+                
+                // Update Text
+                liveCard.querySelector('.val-rot-x').innerText = rx;
+                liveCard.querySelector('.val-rot-y').innerText = ry;
+                liveCard.querySelector('.val-rot-z').innerText = rz;
+
+                // Update 3D Object Rotation (Convert to Radians)
+                alignmentGroup.rotation.x = rx * (Math.PI / 180);
+                alignmentGroup.rotation.y = ry * (Math.PI / 180);
+                alignmentGroup.rotation.z = rz * (Math.PI / 180);
+            };
+
+            liveCard.querySelector('.slider-rot-x').addEventListener('input', updateAlignment);
+            liveCard.querySelector('.slider-rot-y').addEventListener('input', updateAlignment);
+            liveCard.querySelector('.slider-rot-z').addEventListener('input', updateAlignment);
+
+            // Note: We return 'dataGroup' as the mesh to be rotated by sensor data
+            return { scene, camera, renderer, mesh: dataGroup, chart, card: liveCard };
         }
 
         // --- 3. DATA PARSING (CORRECTED INDICES) ---
