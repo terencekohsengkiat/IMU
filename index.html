@@ -46,7 +46,10 @@
                     <h2 class="text-lg font-bold text-white device-name leading-tight">Sensor</h2>
                     <span class="text-xs text-slate-500 font-mono device-id">ID: --</span>
                 </div>
-                <div class="flex gap-1">
+                <div class="flex items-center gap-2">
+                    <div class="battery-indicator flex items-center gap-1 text-xs font-mono text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-700">
+                        <span>🔋</span><span class="bat-val">--%</span>
+                    </div>
                     <button class="settings-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-white transition-colors">⚙️</button>
                     <button class="calib-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-yellow-400 transition-colors">🧭</button>
                     <button class="disconnect-btn p-2 hover:bg-slate-700 rounded-full text-slate-400 hover:text-red-400 transition-colors">✕</button>
@@ -67,7 +70,6 @@
                         <button class="close-settings text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
                     </div>
                     <div class="p-6 overflow-y-auto space-y-8">
-                        
                         <div class="space-y-3">
                             <h4 class="text-xs font-bold text-blue-400 uppercase tracking-widest border-b border-slate-700 pb-1">1. Firmware Renaming</h4>
                             <div class="flex gap-2">
@@ -75,12 +77,11 @@
                                 <input type="text" class="rename-input bg-slate-900 border border-slate-600 text-white text-sm rounded-r block w-full p-2.5" placeholder="Wingfoil">
                                 <button class="burn-name-btn bg-blue-600 hover:bg-blue-700 text-white px-4 rounded text-sm font-bold">BURN</button>
                             </div>
-                            <p class="text-[10px] text-slate-400">Result will be "WT" + Name. Power Cycle Required.</p>
+                            <p class="text-[10px] text-slate-400">Result: "WT" + Name. Power Cycle Required.</p>
                         </div>
 
                         <div class="space-y-3">
                             <h4 class="text-xs font-bold text-yellow-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Algorithm & Calibration</h4>
-                            
                             <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group mb-2">
                                 <div class="flex items-center gap-3">
                                     <span class="text-xl">🧭</span>
@@ -91,7 +92,6 @@
                                 </div>
                                 <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click to Set</span>
                             </button>
-
                             <div class="grid grid-cols-2 gap-4">
                                 <button class="calib-accel-btn bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex flex-col items-center gap-2">
                                     <span class="text-2xl">📏</span><span class="text-sm font-bold text-slate-200">Level Horizon</span>
@@ -140,7 +140,6 @@
             localStorage.setItem('sensor_' + id, JSON.stringify({ ...loadSettings(id), ...s }));
         }
 
-        // --- COMMAND HELPERS ---
         async function sendRaw(ctx, bytes) {
             if(!ctx.device.gatt.connected) return;
             try { await ctx.writeChar.writeValue(new Uint8Array(bytes)); } catch(e) { console.error(e); }
@@ -162,16 +161,30 @@
                 const writeChar = await service.getCharacteristic(WRITE_UUID);
 
                 const ui = createDeviceUI(device);
-                const ctx = { device, server, writeChar, ui, dataLog: [], isMagCalibrating: false };
+                const ctx = { 
+                    device, server, writeChar, ui, 
+                    dataLog: [], 
+                    isMagCalibrating: false,
+                    magPollInterval: null,
+                    battInterval: null
+                };
                 devices.set(device.id, ctx);
 
                 device.addEventListener('gattserverdisconnected', () => {
                     ui.card.classList.add('opacity-50');
                     ui.card.querySelector('.device-name').innerText += " (Disconnected)";
+                    clearInterval(ctx.battInterval); // Stop polling
                 });
 
                 await readChar.startNotifications();
                 readChar.addEventListener('characteristicvaluechanged', (e) => handleData(e, device.id));
+
+                // START BATTERY POLLING (Every 30s)
+                ctx.battInterval = setInterval(() => {
+                    if(device.gatt.connected) sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x64, 0x00]); // Request Reg 0x64
+                }, 30000);
+                // Initial Poll
+                setTimeout(() => sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x64, 0x00]), 2000);
 
                 document.getElementById('recordBtn').classList.remove('hidden');
                 document.getElementById('exportBtn').classList.remove('hidden');
@@ -241,7 +254,6 @@
             }
             animate();
 
-            // Charts
             const chart = new Chart(liveCard.querySelector('.device-chart').getContext('2d'), {
                 type: 'line',
                 data: { labels: Array(50).fill(''), datasets: [
@@ -258,7 +270,6 @@
                 options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x:{type:'linear', grid:{color:'#334155'}}, y:{grid:{color:'#334155'}} } }
             });
 
-            // --- SETTINGS BINDINGS ---
             const modal = liveCard.querySelector('.settings-modal');
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.slider-rot-x').value = settings.rot.x;
@@ -267,36 +278,29 @@
                 modal.classList.remove('hidden'); modal.classList.add('flex');
             });
             liveCard.querySelector('.close-settings').addEventListener('click', () => modal.classList.add('hidden') || modal.classList.remove('flex'));
-            
-            // 1. BURN NAME
+            liveCard.querySelector('.calib-btn').addEventListener('click', () => liveCard.querySelector('.settings-btn').click());
+
             liveCard.querySelector('.burn-name-btn').addEventListener('click', async () => {
                 const n = liveCard.querySelector('.rename-input').value;
-                if(n && confirm(`Rename to "WT${n}"? (Power cycle required)`)) {
+                if(n && confirm(`Rename to "WT${n}"?`)) {
                     const ctx = devices.get(device.id);
                     await unlock(ctx);
-                    // Protocol: "WT" header + "WT" prefix + Name + \r\n
-                    const cmd = "WT" + "WT" + n + "\r\n";
-                    await sendRaw(ctx, new TextEncoder().encode(cmd));
+                    await sendRaw(ctx, new TextEncoder().encode("WT" + "WT" + n + "\r\n"));
                     await save(ctx);
-                    alert("Name Sent! PLEASE RESTART SENSOR NOW.");
+                    alert("Name Sent! Restart sensor.");
                 }
             });
 
-            // 2. SET 9-AXIS MODE
             liveCard.querySelector('.set-9axis-btn').addEventListener('click', async () => {
-                if(!confirm("Enable 9-Axis Mode? (Uses Magnetometer for Absolute Compass)")) return;
+                if(!confirm("Enable 9-Axis Compass Mode?")) return;
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
-                await sendRaw(ctx, [0xFF, 0xAA, 0x24, 0x00, 0x00]); // 0x24=Algorithm, 0x00=9-Axis
-                setTimeout(async () => {
-                    await save(ctx);
-                    alert("9-Axis Mode Enabled. Compass should now work.");
-                }, 500);
+                await sendRaw(ctx, [0xFF, 0xAA, 0x24, 0x00, 0x00]); 
+                setTimeout(async () => { await save(ctx); alert("Compass Enabled."); }, 500);
             });
 
-            // 3. CALIBRATION
             liveCard.querySelector('.calib-accel-btn').addEventListener('click', async () => {
-                if(!confirm("Sensor FLAT? Calibrating (Wait 5s)...")) return;
+                if(!confirm("Sensor FLAT? Calibrating...")) return;
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
                 await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x01, 0x00]); 
@@ -307,11 +311,10 @@
                 const ctx = devices.get(device.id);
                 const btn = e.currentTarget;
                 const viz = liveCard.querySelector('.mag-viz-container');
-                
                 if(!ctx.isMagCalibrating) {
-                    if(!confirm("Start Compass Calibration? Rotate 360° on all axes.")) return;
+                    if(!confirm("Start Compass Calibration?")) return;
                     await unlock(ctx);
-                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x07, 0x00]); // Start Mag
+                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x07, 0x00]); 
                     ctx.isMagCalibrating = true;
                     btn.classList.replace('bg-slate-700', 'bg-green-600');
                     btn.querySelector('span:nth-child(2)').innerText = "FINISH (Save)";
@@ -320,17 +323,18 @@
                 } else {
                     clearInterval(ctx.magPollInterval);
                     await unlock(ctx);
-                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x00, 0x00]); // End Mag
-                    setTimeout(async () => {
-                        await save(ctx);
-                        alert("Mag Calibration Saved.");
-                    }, 500);
+                    await sendRaw(ctx, [0xFF, 0xAA, 0x01, 0x00, 0x00]); 
+                    setTimeout(async () => { await save(ctx); alert("Mag Saved."); }, 500);
                     ctx.isMagCalibrating = false;
                     btn.classList.replace('bg-green-600', 'bg-slate-700');
                     btn.querySelector('span:nth-child(2)').innerText = "Mag Calib";
                     viz.classList.add('hidden');
                     magChart.data.datasets[0].data = []; magChart.update();
                 }
+            });
+
+            liveCard.querySelector('.disconnect-btn').addEventListener('click', () => {
+                if(device.gatt.connected) device.gatt.disconnect();
             });
 
             const updateAlign = () => {
@@ -346,13 +350,13 @@
         function handleData(event, id) {
             const val = event.target.value;
             const ctx = devices.get(id);
-            if(!ctx || val.byteLength < 20) return;
+            if(!ctx || val.byteLength < 5) return; // Basic check
 
-            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61) {
+            // 1. DATA PACKET (0x61)
+            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61 && val.byteLength >= 20) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
-                const ax=getS(2)/32768*16, ay=getS(4)/32768*16, az=getS(6)/32768*16;
                 const angX=getS(14)/32768*180, angY=getS(16)/32768*180, angZ=getS(18)/32768*180;
-
+                
                 const pitch = angX * (Math.PI / 180);
                 const roll = -angY * (Math.PI / 180);
                 const yaw = angZ * (Math.PI / 180);
@@ -363,7 +367,7 @@
                 ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
 
                 if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.setFromEuler(new THREE.Euler(pitch, yaw, roll, 'YXZ'));
-
+                
                 const c = ctx.ui.chart;
                 c.data.datasets[0].data.push(angX);
                 c.data.datasets[1].data.push(angY);
@@ -371,9 +375,31 @@
                 if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
                 c.update();
 
-                if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, ax, ay, az, pitch:angX, roll:angY, yaw:compass });
+                if(isRecording) {
+                    const ax=getS(2)/32768*16, ay=getS(4)/32768*16, az=getS(6)/32768*16;
+                    ctx.dataLog.push({ t: Date.now()-recordingStartTime, ax, ay, az, pitch:angX, roll:angY, yaw:compass });
+                }
             }
 
+            // 2. BATTERY RESPONSE (0x64) - Check register response
+            // Response format usually: 55 71 [RegL] [RegH] [D0L] [D0H]...
+            // If RegL = 64, data is voltage.
+            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x64) {
+                 // Voltage is in bytes 4-5? Check doc. Usually D0L D0H.
+                 // let raw = (val.getUint8(5) << 8) | val.getUint8(4);
+                 // Witmotion: voltage = raw / 100.
+                 // E.g. 396 => 3.96V
+                 const raw = (val.getUint8(5) << 8) | val.getUint8(4);
+                 const voltage = raw / 100;
+                 // Map 3.5V(0%) to 4.2V(100%)
+                 let pct = Math.round((voltage - 3.5) / (4.2 - 3.5) * 100);
+                 if(pct < 0) pct = 0; if(pct > 100) pct = 100;
+                 
+                 ctx.ui.card.querySelector('.bat-val').innerText = pct + "%";
+                 if(pct < 20) ctx.ui.card.querySelector('.battery-indicator').classList.replace('text-slate-400', 'text-red-500');
+            }
+
+            // 3. MAG DATA RESPONSE (0x3A)
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x3A) {
                 const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
                 const mc = ctx.ui.magChart;
