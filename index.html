@@ -29,7 +29,6 @@
             <p class="text-slate-400 text-xs uppercase tracking-wider mt-1">Commercial Sensor Management</p>
         </div>
         <div class="flex gap-3 items-center">
-            <!-- Polling Status Indicator -->
             <div id="pollingStatus" class="hidden text-xs font-mono bg-slate-900 px-3 py-1.5 rounded border border-slate-700">
                 <span class="text-slate-400">Quat Poll:</span> 
                 <span id="pollRateDisplay" class="text-green-400">--Hz</span>
@@ -49,7 +48,6 @@
         </div>
     </header>
 
-    <!-- Sync Banner (shows when recording) -->
     <div id="syncBanner" class="hidden mb-4 bg-red-900/50 border border-red-700 rounded-lg p-3 flex items-center justify-between">
         <div class="flex items-center gap-3">
             <span class="text-2xl pulse-recording">🔴</span>
@@ -187,21 +185,17 @@
         const devices = new Map();
         let isRecording = false;
         let recordingStartTime = 0;
-        let syncTimestamp = null; // ISO string for CSV header
+        let syncTimestamp = null;
         let durationInterval = null;
 
-        // ============================================
-        // ADAPTIVE QUATERNION POLLING SYSTEM
-        // ============================================
         let globalQuatPollInterval = null;
-        let pollIndex = 0; // For staggered polling
+        let pollIndex = 0;
         
-        // Polling rates based on device count (in ms)
         const POLL_RATES = {
-            1: 10,   // 1 sensor: ~100Hz
-            2: 12,   // 2 sensors: ~83Hz each (staggered)
-            3: 15,   // 3 sensors: ~66Hz each (staggered)
-            4: 16    // 4 sensors: ~62Hz each (staggered)
+            1: 10,
+            2: 12,
+            3: 15,
+            4: 16
         };
 
         function getAdaptivePollRate() {
@@ -211,7 +205,6 @@
         }
 
         function updatePollingSystem() {
-            // Clear existing interval
             if (globalQuatPollInterval) {
                 clearInterval(globalQuatPollInterval);
                 globalQuatPollInterval = null;
@@ -226,33 +219,24 @@
             const pollRate = getAdaptivePollRate();
             const effectiveHz = Math.round(1000 / pollRate);
             
-            // Update UI
             document.getElementById('pollingStatus').classList.remove('hidden');
-            document.getElementById('pollRateDisplay').innerText = `${effectiveHz}Hz`;
-            document.getElementById('deviceCountDisplay').innerText = `${deviceCount} sensor${deviceCount > 1 ? 's' : ''}`;
+            document.getElementById('pollRateDisplay').innerText = effectiveHz + 'Hz';
+            document.getElementById('deviceCountDisplay').innerText = deviceCount + ' sensor' + (deviceCount > 1 ? 's' : '');
 
-            // Create staggered polling
             const deviceArray = Array.from(devices.values());
             
             globalQuatPollInterval = setInterval(() => {
                 if (deviceArray.length === 0) return;
-                
-                // Get current device to poll (round-robin)
                 const ctx = deviceArray[pollIndex % deviceArray.length];
                 pollIndex++;
-                
                 if (ctx && ctx.device.gatt.connected) {
-                    // Request quaternion data: FF AA 27 51 00
                     sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x51, 0x00]);
                 }
             }, pollRate);
 
-            console.log(`Quaternion polling started: ${effectiveHz}Hz per sensor, ${deviceCount} device(s)`);
+            console.log('Quaternion polling started: ' + effectiveHz + 'Hz per sensor, ' + deviceCount + ' device(s)');
         }
 
-        // ============================================
-        // CORE FUNCTIONS
-        // ============================================
         function loadSettings(id) {
             const s = localStorage.getItem('sensor_' + id);
             return s ? JSON.parse(s) : { rot: { x: 0, y: 0, z: 0 } };
@@ -276,20 +260,13 @@
             clearInterval(ctx.magPollInterval);
             if (ctx.ui && ctx.ui.card) ctx.ui.card.remove();
             devices.delete(id);
-            
-            // Update polling system when device is removed
             updatePollingSystem();
-            
-            // Hide buttons if no devices left
             if (devices.size === 0) {
                 document.getElementById('recordBtn').classList.add('hidden');
                 document.getElementById('exportBtn').classList.add('hidden');
             }
         }
 
-        // ============================================
-        // DEVICE CONNECTION
-        // ============================================
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
@@ -326,13 +303,11 @@
                 await readChar.startNotifications();
                 readChar.addEventListener('characteristicvaluechanged', (e) => handleData(e, device.id));
 
-                // Battery polling
                 ctx.battInterval = setInterval(() => {
                     if(device.gatt.connected) sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x64, 0x00]); 
                 }, 30000);
                 setTimeout(() => sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x64, 0x00]), 2000);
 
-                // Update polling system with new device
                 updatePollingSystem();
 
                 document.getElementById('recordBtn').classList.remove('hidden');
@@ -340,9 +315,6 @@
             } catch (e) { console.error(e); }
         });
 
-        // ============================================
-        // UI CREATION
-        // ============================================
         function createDeviceUI(device) {
             const template = document.getElementById('deviceTemplate');
             const clone = template.content.cloneNode(true);
@@ -355,7 +327,7 @@
             clone.querySelector('.device-id').innerText = device.id;
             container.appendChild(clone);
             
-            const liveCard = container.querySelector(`.device-card[data-id="${device.id}"]`);
+            const liveCard = container.querySelector('.device-card[data-id="' + device.id + '"]');
             const canvasContainer = liveCard.querySelector('.canvas-container');
             const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0f172a);
             const camera = new THREE.PerspectiveCamera(50, canvasContainer.offsetWidth / canvasContainer.offsetHeight, 0.1, 1000);
@@ -390,7 +362,6 @@
                 obj.traverse(c => { if(c.isMesh) c.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 }); });
                 alignmentGroup.add(obj);
             }, undefined, () => {
-                // Fallback if OBJ fails to load
                 alignmentGroup.add(new THREE.Mesh(new THREE.BoxGeometry(1.5,0.5,2), new THREE.MeshPhongMaterial({color:0xff4444})));
             });
 
@@ -420,7 +391,6 @@
                 options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x:{type:'linear', grid:{color:'#334155'}}, y:{grid:{color:'#334155'}} } }
             });
 
-            // UI Handlers
             const modal = liveCard.querySelector('.settings-modal');
             liveCard.querySelector('.settings-btn').addEventListener('click', () => {
                 liveCard.querySelector('.slider-rot-x').value = settings.rot.x;
@@ -433,7 +403,7 @@
 
             liveCard.querySelector('.burn-name-btn').addEventListener('click', async () => {
                 const n = liveCard.querySelector('.rename-input').value;
-                if(n && confirm(`Rename to "WT${n}"?`)) {
+                if(n && confirm('Rename to "WT' + n + '"?')) {
                     const ctx = devices.get(device.id);
                     await unlock(ctx);
                     await sendRaw(ctx, new TextEncoder().encode("WT" + "WT" + n + "\r\n"));
@@ -497,9 +467,6 @@
             return { scene, camera, renderer, mesh: dataGroup, chart, magChart, card: liveCard };
         }
 
-        // ============================================
-        // DATA HANDLING
-        // ============================================
         function handleData(event, id) {
             const val = event.target.value;
             const ctx = devices.get(id);
@@ -507,42 +474,32 @@
 
             const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
 
-            // --- QUATERNION RESPONSE (0x55 0x71 0x51) ---
-            // This is the response to our polling command FF AA 27 51 00
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x51) {
-                
-                // Update mode indicator
                 const modeLbl = ctx.ui.card.querySelector('.mode-indicator');
                 if(!modeLbl.innerText.includes("Quaternion")) {
                     modeLbl.innerText = "Mode: Quaternion (Polled)";
                     modeLbl.classList.remove('text-slate-500');
                     modeLbl.classList.add('text-green-500');
                     ctx.quatMode = true;
-                    
-                    // Show quaternion rate indicator
                     ctx.ui.card.querySelector('.quat-rate-indicator').classList.remove('hidden');
                 }
 
-                // Calculate actual receive rate
                 ctx.quatReceiveCount++;
                 const now = Date.now();
                 if (now - ctx.lastQuatTime >= 1000) {
                     const hz = ctx.quatReceiveCount;
-                    ctx.ui.card.querySelector('.quat-hz').innerText = `${hz}Hz`;
+                    ctx.ui.card.querySelector('.quat-hz').innerText = hz + 'Hz';
                     ctx.quatReceiveCount = 0;
                     ctx.lastQuatTime = now;
                 }
 
-                // Parse quaternion data (starts at byte 4 after header 0x55 0x71 0x51 0x00)
                 const q0 = getS(4) / 32768.0;
                 const q1 = getS(6) / 32768.0;
                 const q2 = getS(8) / 32768.0;
                 const q3 = getS(10) / 32768.0;
                 
-                // Convert to THREE.js quaternion (adjust axes as needed)
                 const q = new THREE.Quaternion(q1, q3, -q2, q0);
 
-                // Vector math for angles
                 const vNose = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
                 const vWing = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
 
@@ -552,14 +509,12 @@
                 let compass = Math.atan2(vNose.x, vNose.z) * (180/Math.PI);
                 if(compass < 0) compass += 360;
 
-                // Update UI
                 ctx.ui.card.querySelector('.val-ang-x').innerText = pitchDeg.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-y').innerText = rollDeg.toFixed(1) + "°";
                 ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
 
                 if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.copy(q);
 
-                // Update chart
                 const c = ctx.ui.chart;
                 c.data.datasets[0].data.push(pitchDeg);
                 c.data.datasets[1].data.push(rollDeg);
@@ -567,22 +522,19 @@
                 if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
                 c.update();
                 
-                // Record data with synchronized timestamp
                 if(isRecording) {
                     ctx.dataLog.push({ 
                         t: Date.now() - recordingStartTime, 
                         pitch: pitchDeg, 
                         roll: rollDeg, 
                         yaw: compass,
-                        q0, q1, q2, q3 // Also store raw quaternion
+                        q0, q1, q2, q3
                     });
                 }
                 return;
             }
 
-            // --- ANGLE FALLBACK (0x61) - Default sensor output ---
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61) {
-                // Only use this if quaternion polling hasn't kicked in yet
                 if (ctx.quatMode) return;
                 
                 const angX = getS(14)/32768*180, angY = getS(16)/32768*180, angZ = getS(18)/32768*180;
@@ -610,7 +562,6 @@
                 if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, pitch, roll, yaw: compass });
             }
 
-            // --- BATTERY (0x64) ---
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x64) {
                 const raw = (val.getUint8(5) << 8) | val.getUint8(4);
                 const voltage = raw / 100;
@@ -620,7 +571,6 @@
                 if(pct < 20) ctx.ui.card.querySelector('.battery-indicator').classList.replace('text-slate-400', 'text-red-500');
             }
             
-            // --- MAGNETIC FIELD (0x3A) ---
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x3A) {
                 const mc = ctx.ui.magChart;
                 mc.data.datasets[0].data.push({ x: getS(4), y: getS(6) });
@@ -629,29 +579,19 @@
             }
         }
 
-        // ============================================
-        // SYNC & RECORD SYSTEM
-        // ============================================
         function startSyncRecording() {
-            // Capture sync timestamp
             syncTimestamp = new Date().toISOString();
             recordingStartTime = Date.now();
             isRecording = true;
             
-            // Clear all data logs simultaneously
-            devices.forEach(ctx => {
-                ctx.dataLog = [];
-            });
+            devices.forEach(ctx => { ctx.dataLog = []; });
             
-            // Update UI
             document.getElementById('recordBtn').classList.add('hidden');
             document.getElementById('syncBanner').classList.remove('hidden');
             document.getElementById('syncTimeDisplay').innerText = syncTimestamp;
             
-            // Start duration counter
             durationInterval = setInterval(updateDurationDisplay, 1000);
             
-            // Play sync beep (if supported)
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = audioCtx.createOscillator();
@@ -664,24 +604,21 @@
                 setTimeout(() => osc.stop(), 150);
             } catch(e) {}
             
-            console.log(`Recording started - Sync timestamp: ${syncTimestamp}`);
+            console.log('Recording started - Sync timestamp: ' + syncTimestamp);
         }
 
         function stopRecording() {
             isRecording = false;
             clearInterval(durationInterval);
             
-            // Update UI
             document.getElementById('syncBanner').classList.add('hidden');
             document.getElementById('recordBtn').classList.remove('hidden');
             
-            // Count total data points
             let totalPoints = 0;
             devices.forEach(ctx => totalPoints += ctx.dataLog.length);
             
-            console.log(`Recording stopped - Total data points: ${totalPoints}`);
+            console.log('Recording stopped - Total data points: ' + totalPoints);
             
-            // Play stop beep
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = audioCtx.createOscillator();
@@ -700,21 +637,16 @@
             const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
             const mins = Math.floor(elapsed / 60);
             const secs = elapsed % 60;
-            document.getElementById('durationDisplay').innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+            document.getElementById('durationDisplay').innerText = mins + ':' + secs.toString().padStart(2, '0');
             
-            // Update data points count
             let totalPoints = 0;
             devices.forEach(ctx => totalPoints += ctx.dataLog.length);
             document.getElementById('dataPointsDisplay').innerText = totalPoints.toLocaleString();
         }
 
-        // Record button handler
         document.getElementById('recordBtn').addEventListener('click', startSyncRecording);
         document.getElementById('stopRecordingBtn').addEventListener('click', stopRecording);
 
-        // ============================================
-        // CSV EXPORT
-        // ============================================
         document.getElementById('exportBtn').addEventListener('click', () => {
             if (devices.size === 0) {
                 alert("No devices connected!");
@@ -733,31 +665,28 @@
                 const deviceName = ctx.device.name || 'Unknown';
                 const mode = ctx.quatMode ? 'Quaternion' : 'Euler';
                 
-                // Build CSV with header
-                let csv = `# WitMotion Pro - Session Export\n`;
-                csv += `# Session Sync: ${syncTimestamp || 'Not synchronized'}\n`;
-                csv += `# Device: ${deviceName} (ID: ${id})\n`;
-                csv += `# Mode: ${mode}\n`;
-                csv += `# Data Points: ${ctx.dataLog.length}\n`;
-                csv += `# Export Time: ${new Date().toISOString()}\n`;
-                csv += `#\n`;
+                let csv = '# WitMotion Pro - Session Export\n';
+                csv += '# Session Sync: ' + (syncTimestamp || 'Not synchronized') + '\n';
+                csv += '# Device: ' + deviceName + ' (ID: ' + id + ')\n';
+                csv += '# Mode: ' + mode + '\n';
+                csv += '# Data Points: ' + ctx.dataLog.length + '\n';
+                csv += '# Export Time: ' + new Date().toISOString() + '\n';
+                csv += '#\n';
                 
-                // Column headers
-                if (ctx.quatMode && ctx.dataLog[0]?.q0 !== undefined) {
-                    csv += `Time(ms),Pitch,Roll,Yaw,Q0,Q1,Q2,Q3\n`;
+                if (ctx.quatMode && ctx.dataLog[0] && ctx.dataLog[0].q0 !== undefined) {
+                    csv += 'Time(ms),Pitch,Roll,Yaw,Q0,Q1,Q2,Q3\n';
                     csv += ctx.dataLog.map(r => 
-                        `${r.t},${r.pitch.toFixed(3)},${r.roll.toFixed(3)},${r.yaw.toFixed(3)},${r.q0.toFixed(6)},${r.q1.toFixed(6)},${r.q2.toFixed(6)},${r.q3.toFixed(6)}`
-                    ).join("\n");
+                        r.t + ',' + r.pitch.toFixed(3) + ',' + r.roll.toFixed(3) + ',' + r.yaw.toFixed(3) + ',' + r.q0.toFixed(6) + ',' + r.q1.toFixed(6) + ',' + r.q2.toFixed(6) + ',' + r.q3.toFixed(6)
+                    ).join('\n');
                 } else {
-                    csv += `Time(ms),Pitch,Roll,Yaw\n`;
+                    csv += 'Time(ms),Pitch,Roll,Yaw\n';
                     csv += ctx.dataLog.map(r => 
-                        `${r.t},${r.pitch.toFixed(3)},${r.roll.toFixed(3)},${r.yaw.toFixed(3)}`
-                    ).join("\n");
+                        r.t + ',' + r.pitch.toFixed(3) + ',' + r.roll.toFixed(3) + ',' + r.yaw.toFixed(3)
+                    ).join('\n');
                 }
                 
-                // Generate filename with device name and timestamp
                 const timestamp = syncTimestamp ? syncTimestamp.replace(/[:.]/g, '-').slice(0, 19) : 'unsync';
-                const filename = `${deviceName}_${timestamp}.csv`;
+                const filename = deviceName + '_' + timestamp + '.csv';
                 
                 const a = document.createElement('a'); 
                 a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); 
@@ -765,7 +694,7 @@
                 a.click();
             });
             
-            alert(`Exported ${devices.size} CSV file(s).\nAll files share the same sync timestamp for alignment.`);
+            alert('Exported ' + devices.size + ' CSV file(s).\nAll files share the same sync timestamp for alignment.');
         });
     </script>
 </body>
