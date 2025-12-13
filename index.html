@@ -223,9 +223,8 @@
             document.getElementById('pollRateDisplay').innerText = effectiveHz + 'Hz';
             document.getElementById('deviceCountDisplay').innerText = deviceCount + ' sensor' + (deviceCount > 1 ? 's' : '');
 
-            const deviceArray = Array.from(devices.values());
-            
             globalQuatPollInterval = setInterval(() => {
+                const deviceArray = Array.from(devices.values());
                 if (deviceArray.length === 0) return;
                 const ctx = deviceArray[pollIndex % deviceArray.length];
                 pollIndex++;
