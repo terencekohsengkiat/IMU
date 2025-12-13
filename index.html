@@ -123,7 +123,7 @@
         document.getElementById('addDeviceBtn').addEventListener('click', async () => {
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
+                    filters: [{ namePrefix: 'WT' }],
                     optionalServices: [SERVICE_UUID]
                 });
 
@@ -241,6 +241,18 @@
             loader.load(
                 'assets/sensor.obj', 
                 function (object) {
+                    console.log("Model Loaded!");
+                    pivot.remove(placeholder);
+                    
+                    // --- FIX 1: SET ROTATION ORDER TO MATCH SENSOR (ZYX) ---
+                    object.rotation.order = 'ZYX'; 
+
+                    // --- FIX 2: PREPARE FOR SMOOTHING ---
+                    // We store the "Target" (where the sensor IS) separate from the "Current" (where the model IS)
+                    object.userData = { 
+                        targetRot: { x: 0, y: 0, z: 0 } 
+                    };
+
                     const box = new THREE.Box3().setFromObject(object);
                     const size = new THREE.Vector3();
                     box.getSize(size);
@@ -252,48 +264,35 @@
                     object.position.sub(center);
 
                     object.traverse((child) => {
-                        if (child.isMesh) child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 });
+                        if (child.isMesh) {
+                            child.material = new THREE.MeshPhongMaterial({ color: 0x3b82f6 });
+                        }
                     });
 
-                    alignmentGroup.add(object);
-                },
-                undefined,
-                function (error) {
-                    // Fallback Cube
-                    const geo = new THREE.BoxGeometry(1.5, 0.5, 2);
-                    const mat = new THREE.MeshPhongMaterial({ color: 0xff4444 });
-                    const cube = new THREE.Mesh(geo, mat);
-                    alignmentGroup.add(cube);
+                    // Assign to global UI mesh so we can control it
+                    ui.mesh = object;
+                    pivot.add(object);
                 }
             );
 
-            // Animation
+            // --- ANIMATION LOOP (WITH SMOOTHING) ---
             function animate() {
                 requestAnimationFrame(animate);
+                
+                // If the model is loaded, smooth the rotation
+                if (ui.mesh && ui.mesh.userData.targetRot) {
+                    // "0.1" is the smoothing factor. 
+                    // 0.05 = Very slow/smooth, 0.5 = Fast/snappy
+                    const smoothing = 0.15; 
+
+                    ui.mesh.rotation.x += (ui.mesh.userData.targetRot.x - ui.mesh.rotation.x) * smoothing;
+                    ui.mesh.rotation.y += (ui.mesh.userData.targetRot.y - ui.mesh.rotation.y) * smoothing;
+                    ui.mesh.rotation.z += (ui.mesh.userData.targetRot.z - ui.mesh.rotation.z) * smoothing;
+                }
+
                 renderer.render(scene, camera);
             }
             animate();
-
-            // --- CHART ---
-            const ctx = liveCard.querySelector('.device-chart').getContext('2d');
-            const chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: Array(50).fill(''),
-                    datasets: [
-                        { label: 'Roll', data: Array(50).fill(0), borderColor: '#ef4444', borderWidth: 2, pointRadius: 0 },
-                        { label: 'Pitch', data: Array(50).fill(0), borderColor: '#22c55e', borderWidth: 2, pointRadius: 0 },
-                        { label: 'Yaw', data: Array(50).fill(0), borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0 }
-                    ]
-                },
-                options: { 
-                    animation: false, 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    scales: { y: { display: true, grid: { color: '#4b5563' } }, x: { display: false } },
-                    plugins: { legend: { display: true, labels: { color: 'white' } } }
-                }
-            });
 
             // --- UI BINDINGS ---
             // Settings Toggle
@@ -372,11 +371,13 @@
                 ui.card.querySelector('.val-ang-y').innerText = angY.toFixed(2) + "°";
                 ui.card.querySelector('.val-ang-z').innerText = angZ.toFixed(2) + "°";
 
-                // Update 3D Model Rotation
-                if (ui.mesh) {
-                    ui.mesh.rotation.x = angX * (Math.PI / 180);
-                    ui.mesh.rotation.z = -angY * (Math.PI / 180); 
-                    ui.mesh.rotation.y = -angZ * (Math.PI / 180);
+                // Update 3D Model Targets (Don't set rotation directly!)
+                if (ui.mesh && ui.mesh.userData.targetRot) {
+                    // We just tell the model where it SHOULD be. 
+                    // The animate() loop handles the smooth movement.
+                    ui.mesh.userData.targetRot.x = angX * (Math.PI / 180);
+                    ui.mesh.userData.targetRot.z = -angY * (Math.PI / 180); 
+                    ui.mesh.userData.targetRot.y = -angZ * (Math.PI / 180);
                 }
 
                 // Update Chart
