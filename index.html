@@ -136,6 +136,15 @@
                                 <div class="text-xs text-slate-500 mt-1">Polling is active. Status shows if this sensor responds.</div>
                             </div>
                             
+                            <!-- OUTPUT RATE SETTING -->
+                            <div class="bg-orange-900/30 border border-orange-700 rounded p-3">
+                                <div class="text-sm font-bold text-orange-300 mb-2">⚡ Set Output Rate</div>
+                                <div class="text-xs text-orange-200/70 mb-3">If your sensor shows low Hz (1-10Hz), click below to set it to 100Hz. This setting is saved to the sensor.</div>
+                                <button class="set-100hz-btn w-full bg-orange-600 hover:bg-orange-500 text-white p-2 rounded font-bold text-sm">
+                                    Set 100Hz Output Rate
+                                </button>
+                            </div>
+                            
                             <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group">
                                 <div class="flex items-center gap-3">
                                     <span class="text-xl">🧭</span>
@@ -201,12 +210,11 @@
         let globalQuatPollInterval = null;
         let pollIndex = 0;
         
-        // Slower poll rates to avoid GATT congestion
         const POLL_RATES = {
-            1: 20,   // 1 sensor: ~50Hz
-            2: 25,   // 2 sensors: ~40Hz each
-            3: 30,   // 3 sensors: ~33Hz each
-            4: 35    // 4 sensors: ~28Hz each
+            1: 20,
+            2: 25,
+            3: 30,
+            4: 35
         };
 
         function getAdaptivePollRate() {
@@ -263,14 +271,19 @@
             try { 
                 await ctx.writeChar.writeValue(new Uint8Array(bytes)); 
             } catch(e) { 
-                // Silently ignore GATT busy errors
                 if (!e.message.includes('GATT')) console.error(e); 
             }
             ctx.isWriting = false;
         }
         
-        async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 200)); }
-        async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 200)); }
+        async function unlock(ctx) { 
+            await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); 
+            await new Promise(r => setTimeout(r, 200)); 
+        }
+        async function save(ctx) { 
+            await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); 
+            await new Promise(r => setTimeout(r, 200)); 
+        }
         
         function removeDevice(id) {
             const ctx = devices.get(id);
@@ -446,6 +459,37 @@
                 }
             });
 
+            // SET 100Hz OUTPUT RATE BUTTON
+            liveCard.querySelector('.set-100hz-btn').addEventListener('click', async () => {
+                const ctx = devices.get(device.id);
+                const btn = liveCard.querySelector('.set-100hz-btn');
+                
+                btn.innerText = 'Setting...';
+                btn.disabled = true;
+                
+                try {
+                    // Unlock
+                    await unlock(ctx);
+                    
+                    // Set return rate to 100Hz (0x09)
+                    await sendRaw(ctx, [0xFF, 0xAA, 0x03, 0x09, 0x00]);
+                    await new Promise(r => setTimeout(r, 200));
+                    
+                    // Save configuration
+                    await save(ctx);
+                    
+                    btn.innerText = '✓ Set to 100Hz!';
+                    btn.classList.remove('bg-orange-600', 'hover:bg-orange-500');
+                    btn.classList.add('bg-green-600');
+                    
+                    alert('Output rate set to 100Hz and saved!\n\nThe sensor should now respond faster. Check the Hz indicator on the card.');
+                } catch(e) {
+                    console.error(e);
+                    btn.innerText = 'Error - Try Again';
+                    btn.disabled = false;
+                }
+            });
+
             liveCard.querySelector('.set-9axis-btn').addEventListener('click', async () => {
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
@@ -454,7 +498,7 @@
             });
 
             liveCard.querySelector('.factory-reset-btn').addEventListener('click', async () => {
-                if(!confirm("WARNING: This will restore factory defaults. Continue?")) return;
+                if(!confirm("WARNING: This will restore factory defaults (including 10Hz rate). Continue?")) return;
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
                 await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x01, 0x00]);
@@ -510,9 +554,6 @@
             return { scene, camera, renderer, mesh: dataGroup, chart, magChart, card: liveCard };
         }
 
-        // ============================================
-        // MULTI-PACKET PARSER - Finds all packets in buffer
-        // ============================================
         function handleData(event, id) {
             const ctx = devices.get(id);
             if(!ctx) return;
@@ -520,15 +561,12 @@
             const buffer = new Uint8Array(event.target.value.buffer);
             if(buffer.length < 2) return;
 
-            // Scan through entire buffer looking for 0x55 headers
             for(let i = 0; i < buffer.length - 1; i++) {
                 if(buffer[i] !== 0x55) continue;
                 
                 const packetType = buffer[i + 1];
                 
-                // --- QUATERNION RESPONSE (0x55 0x71 0x51) ---
                 if(packetType === 0x71 && i + 2 < buffer.length && buffer[i + 2] === 0x51) {
-                    // Need at least 12 bytes: 55 71 51 00 [Q0L Q0H Q1L Q1H Q2L Q2H Q3L Q3H]
                     if(i + 12 > buffer.length) continue;
                     
                     const getS = (offset) => {
@@ -541,7 +579,6 @@
                     const q2 = getS(8) / 32768.0;
                     const q3 = getS(10) / 32768.0;
                     
-                    // Update mode indicator
                     const modeLbl = ctx.ui.card.querySelector('.mode-indicator');
                     if(!ctx.quatMode) {
                         modeLbl.innerText = "Mode: Quaternion (Polled)";
@@ -551,7 +588,6 @@
                         ctx.ui.card.querySelector('.quat-rate-indicator').classList.remove('hidden');
                     }
 
-                    // Calculate Hz
                     ctx.quatReceiveCount++;
                     const now = Date.now();
                     if (now - ctx.lastQuatTime >= 1000) {
@@ -592,13 +628,12 @@
                         });
                     }
                     
-                    i += 19; // Skip past this packet (20 bytes total for 0x71 response)
+                    i += 19;
                     continue;
                 }
                 
-                // --- EULER ANGLE (0x55 0x61) ---
                 if(packetType === 0x61) {
-                    if(ctx.quatMode) { i += 19; continue; } // Skip if using quaternion
+                    if(ctx.quatMode) { i += 19; continue; }
                     if(i + 20 > buffer.length) continue;
                     
                     const getS = (offset) => {
@@ -632,7 +667,6 @@
                     continue;
                 }
                 
-                // --- BATTERY (0x55 0x71 0x64) ---
                 if(packetType === 0x71 && i + 2 < buffer.length && buffer[i + 2] === 0x64) {
                     if(i + 6 > buffer.length) continue;
                     const raw = (buffer[i + 5] << 8) | buffer[i + 4];
@@ -645,7 +679,6 @@
                     continue;
                 }
                 
-                // --- MAGNETIC FIELD (0x55 0x71 0x3A) ---
                 if(packetType === 0x71 && i + 2 < buffer.length && buffer[i + 2] === 0x3A) {
                     if(i + 8 > buffer.length) continue;
                     const getS = (offset) => {
