@@ -127,15 +127,27 @@
 
                         <div class="space-y-3">
                             <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Output Mode</h4>
-                            <div class="bg-green-900/30 border border-green-700 rounded p-3">
-                                <div class="flex items-center gap-2 text-green-400 text-sm font-bold">
-                                    <span>✓</span> Quaternion Polling Active
+                            
+                            <!-- DYNAMIC STATUS INDICATOR -->
+                            <div class="quat-status-box bg-slate-900/50 border border-slate-600 rounded p-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-slate-300">Quaternion Response:</span>
+                                    <span class="quat-status-indicator text-xs font-mono px-2 py-1 rounded bg-red-900/50 text-red-400">NOT RESPONDING</span>
                                 </div>
-                                <div class="text-xs text-green-300/70 mt-1">
-                                    Automatic quaternion polling is enabled. Rate adjusts based on connected sensors.
-                                </div>
+                                <div class="text-xs text-slate-500 mt-1">Polling is active. Status shows if this sensor responds.</div>
                             </div>
-                            <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group mt-2">
+                            
+                            <button class="test-quat-btn w-full bg-purple-700 hover:bg-purple-600 border border-purple-600 p-3 rounded flex items-center justify-between group">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xl">🧪</span>
+                                    <div class="text-left">
+                                        <div class="text-sm font-bold text-slate-200">Test Quaternion Read</div>
+                                        <div class="text-[10px] text-slate-400">Send single poll, check console</div>
+                                    </div>
+                                </div>
+                            </button>
+                            
+                            <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group">
                                 <div class="flex items-center gap-3">
                                     <span class="text-xl">🧭</span>
                                     <div class="text-left">
@@ -143,7 +155,16 @@
                                         <div class="text-[10px] text-slate-400">Enable Magnetometer</div>
                                     </div>
                                 </div>
-                                <span class="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">Click Once</span>
+                            </button>
+                            
+                            <button class="factory-reset-btn w-full bg-red-900/50 hover:bg-red-800/50 border border-red-700 p-3 rounded flex items-center justify-between group">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xl">🔄</span>
+                                    <div class="text-left">
+                                        <div class="text-sm font-bold text-red-300">Factory Reset</div>
+                                        <div class="text-[10px] text-red-400">Restore default configuration</div>
+                                    </div>
+                                </div>
                             </button>
                         </div>
 
@@ -223,7 +244,6 @@
             document.getElementById('pollRateDisplay').innerText = effectiveHz + 'Hz';
             document.getElementById('deviceCountDisplay').innerText = deviceCount + ' sensor' + (deviceCount > 1 ? 's' : '');
 
-            // FIX: Get fresh device list INSIDE the interval callback each time
             globalQuatPollInterval = setInterval(() => {
                 const deviceArray = Array.from(devices.values());
                 if (deviceArray.length === 0) return;
@@ -249,7 +269,11 @@
 
         async function sendRaw(ctx, bytes) {
             if(!ctx.device.gatt.connected) return;
-            try { await ctx.writeChar.writeValue(new Uint8Array(bytes)); } catch(e) { console.error(e); }
+            try { 
+                await ctx.writeChar.writeValue(new Uint8Array(bytes)); 
+                // Debug log
+                console.log('[' + ctx.device.name + '] TX:', bytes.map(b => b.toString(16).padStart(2, '0')).join(' '));
+            } catch(e) { console.error(e); }
         }
         async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 200)); }
         async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 200)); }
@@ -398,6 +422,20 @@
                 liveCard.querySelector('.slider-rot-x').value = settings.rot.x;
                 liveCard.querySelector('.slider-rot-y').value = settings.rot.y;
                 liveCard.querySelector('.slider-rot-z').value = settings.rot.z;
+                
+                // Update quaternion status indicator
+                const ctx = devices.get(device.id);
+                const statusEl = liveCard.querySelector('.quat-status-indicator');
+                if (ctx && ctx.quatMode) {
+                    statusEl.innerText = 'RESPONDING ✓';
+                    statusEl.classList.remove('bg-red-900/50', 'text-red-400');
+                    statusEl.classList.add('bg-green-900/50', 'text-green-400');
+                } else {
+                    statusEl.innerText = 'NOT RESPONDING';
+                    statusEl.classList.remove('bg-green-900/50', 'text-green-400');
+                    statusEl.classList.add('bg-red-900/50', 'text-red-400');
+                }
+                
                 modal.classList.remove('hidden'); modal.classList.add('flex');
             });
             liveCard.querySelector('.close-settings').addEventListener('click', () => modal.classList.add('hidden') || modal.classList.remove('flex'));
@@ -414,11 +452,31 @@
                 }
             });
 
+            // TEST QUATERNION BUTTON
+            liveCard.querySelector('.test-quat-btn').addEventListener('click', async () => {
+                const ctx = devices.get(device.id);
+                console.log('=== TESTING QUATERNION READ FOR ' + device.name + ' ===');
+                console.log('Sending: FF AA 27 51 00');
+                await sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x51, 0x00]);
+                alert('Quaternion poll sent! Check browser console (F12) for response.');
+            });
+
             liveCard.querySelector('.set-9axis-btn').addEventListener('click', async () => {
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
                 await sendRaw(ctx, [0xFF, 0xAA, 0x24, 0x00, 0x00]); 
                 setTimeout(async () => { await save(ctx); alert("Compass Mode (9-Axis) Enabled."); }, 500);
+            });
+
+            // FACTORY RESET BUTTON
+            liveCard.querySelector('.factory-reset-btn').addEventListener('click', async () => {
+                if(!confirm("WARNING: This will restore factory defaults. Continue?")) return;
+                const ctx = devices.get(device.id);
+                await unlock(ctx);
+                // Save with value 1 = restore defaults
+                await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x01, 0x00]);
+                await new Promise(r => setTimeout(r, 500));
+                alert("Factory reset command sent. Please restart the sensor.");
             });
 
             liveCard.querySelector('.calib-accel-btn').addEventListener('click', async () => {
@@ -474,9 +532,15 @@
             const ctx = devices.get(id);
             if(!ctx || val.byteLength < 5) return; 
 
+            // DEBUG: Log all incoming packets
+            const bytes = Array.from(new Uint8Array(val.buffer)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            console.log('[' + ctx.device.name + '] RX:', bytes);
+
             const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
 
             if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x51) {
+                console.log('[' + ctx.device.name + '] *** QUATERNION RESPONSE RECEIVED ***');
+                
                 const modeLbl = ctx.ui.card.querySelector('.mode-indicator');
                 if(!modeLbl.innerText.includes("Quaternion")) {
                     modeLbl.innerText = "Mode: Quaternion (Polled)";
