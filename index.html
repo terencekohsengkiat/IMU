@@ -223,17 +223,20 @@
             document.getElementById('pollRateDisplay').innerText = effectiveHz + 'Hz';
             document.getElementById('deviceCountDisplay').innerText = deviceCount + ' sensor' + (deviceCount > 1 ? 's' : '');
 
+            // FIX: Get fresh device list INSIDE the interval callback each time
             globalQuatPollInterval = setInterval(() => {
                 const deviceArray = Array.from(devices.values());
                 if (deviceArray.length === 0) return;
+                
                 const ctx = deviceArray[pollIndex % deviceArray.length];
                 pollIndex++;
+                
                 if (ctx && ctx.device.gatt.connected) {
                     sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x51, 0x00]);
                 }
             }, pollRate);
 
-            console.log('Quaternion polling started: ' + effectiveHz + 'Hz per sensor, ' + deviceCount + ' device(s)');
+            console.log('Quaternion polling started: ' + effectiveHz + 'Hz, ' + deviceCount + ' device(s)');
         }
 
         function loadSettings(id) {
