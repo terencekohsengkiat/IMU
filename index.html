@@ -128,7 +128,6 @@
                         <div class="space-y-3">
                             <h4 class="text-xs font-bold text-purple-400 uppercase tracking-widest border-b border-slate-700 pb-1">2. Output Mode</h4>
                             
-                            <!-- DYNAMIC STATUS INDICATOR -->
                             <div class="quat-status-box bg-slate-900/50 border border-slate-600 rounded p-3">
                                 <div class="flex items-center justify-between">
                                     <span class="text-sm text-slate-300">Quaternion Response:</span>
@@ -136,16 +135,6 @@
                                 </div>
                                 <div class="text-xs text-slate-500 mt-1">Polling is active. Status shows if this sensor responds.</div>
                             </div>
-                            
-                            <button class="test-quat-btn w-full bg-purple-700 hover:bg-purple-600 border border-purple-600 p-3 rounded flex items-center justify-between group">
-                                <div class="flex items-center gap-3">
-                                    <span class="text-xl">🧪</span>
-                                    <div class="text-left">
-                                        <div class="text-sm font-bold text-slate-200">Test Quaternion Read</div>
-                                        <div class="text-[10px] text-slate-400">Send single poll, check console</div>
-                                    </div>
-                                </div>
-                            </button>
                             
                             <button class="set-9axis-btn w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 p-3 rounded flex items-center justify-between group">
                                 <div class="flex items-center gap-3">
@@ -212,11 +201,12 @@
         let globalQuatPollInterval = null;
         let pollIndex = 0;
         
+        // Slower poll rates to avoid GATT congestion
         const POLL_RATES = {
-            1: 10,
-            2: 12,
-            3: 15,
-            4: 16
+            1: 20,   // 1 sensor: ~50Hz
+            2: 25,   // 2 sensors: ~40Hz each
+            3: 30,   // 3 sensors: ~33Hz each
+            4: 35    // 4 sensors: ~28Hz each
         };
 
         function getAdaptivePollRate() {
@@ -251,12 +241,12 @@
                 const ctx = deviceArray[pollIndex % deviceArray.length];
                 pollIndex++;
                 
-                if (ctx && ctx.device.gatt.connected) {
+                if (ctx && ctx.device.gatt.connected && !ctx.isWriting) {
                     sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x51, 0x00]);
                 }
             }, pollRate);
 
-            console.log('Quaternion polling started: ' + effectiveHz + 'Hz, ' + deviceCount + ' device(s)');
+            console.log('Quaternion polling: ' + effectiveHz + 'Hz, ' + deviceCount + ' device(s)');
         }
 
         function loadSettings(id) {
@@ -268,13 +258,17 @@
         }
 
         async function sendRaw(ctx, bytes) {
-            if(!ctx.device.gatt.connected) return;
+            if(!ctx.device.gatt.connected || ctx.isWriting) return;
+            ctx.isWriting = true;
             try { 
                 await ctx.writeChar.writeValue(new Uint8Array(bytes)); 
-                // Debug log
-                console.log('[' + ctx.device.name + '] TX:', bytes.map(b => b.toString(16).padStart(2, '0')).join(' '));
-            } catch(e) { console.error(e); }
+            } catch(e) { 
+                // Silently ignore GATT busy errors
+                if (!e.message.includes('GATT')) console.error(e); 
+            }
+            ctx.isWriting = false;
         }
+        
         async function unlock(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x69, 0x88, 0xB5]); await new Promise(r => setTimeout(r, 200)); }
         async function save(ctx) { await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x00, 0x00]); await new Promise(r => setTimeout(r, 200)); }
         
@@ -315,7 +309,8 @@
                     battInterval: null,
                     quatReceiveCount: 0,
                     lastQuatTime: Date.now(),
-                    quatMode: false
+                    quatMode: false,
+                    isWriting: false
                 };
                 devices.set(device.id, ctx);
 
@@ -423,7 +418,6 @@
                 liveCard.querySelector('.slider-rot-y').value = settings.rot.y;
                 liveCard.querySelector('.slider-rot-z').value = settings.rot.z;
                 
-                // Update quaternion status indicator
                 const ctx = devices.get(device.id);
                 const statusEl = liveCard.querySelector('.quat-status-indicator');
                 if (ctx && ctx.quatMode) {
@@ -452,15 +446,6 @@
                 }
             });
 
-            // TEST QUATERNION BUTTON
-            liveCard.querySelector('.test-quat-btn').addEventListener('click', async () => {
-                const ctx = devices.get(device.id);
-                console.log('=== TESTING QUATERNION READ FOR ' + device.name + ' ===');
-                console.log('Sending: FF AA 27 51 00');
-                await sendRaw(ctx, [0xFF, 0xAA, 0x27, 0x51, 0x00]);
-                alert('Quaternion poll sent! Check browser console (F12) for response.');
-            });
-
             liveCard.querySelector('.set-9axis-btn').addEventListener('click', async () => {
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
@@ -468,12 +453,10 @@
                 setTimeout(async () => { await save(ctx); alert("Compass Mode (9-Axis) Enabled."); }, 500);
             });
 
-            // FACTORY RESET BUTTON
             liveCard.querySelector('.factory-reset-btn').addEventListener('click', async () => {
                 if(!confirm("WARNING: This will restore factory defaults. Continue?")) return;
                 const ctx = devices.get(device.id);
                 await unlock(ctx);
-                // Save with value 1 = restore defaults
                 await sendRaw(ctx, [0xFF, 0xAA, 0x00, 0x01, 0x00]);
                 await new Promise(r => setTimeout(r, 500));
                 alert("Factory reset command sent. Please restart the sensor.");
@@ -527,121 +510,155 @@
             return { scene, camera, renderer, mesh: dataGroup, chart, magChart, card: liveCard };
         }
 
+        // ============================================
+        // MULTI-PACKET PARSER - Finds all packets in buffer
+        // ============================================
         function handleData(event, id) {
-            const val = event.target.value;
             const ctx = devices.get(id);
-            if(!ctx || val.byteLength < 5) return; 
-
-            // DEBUG: Log all incoming packets
-            const bytes = Array.from(new Uint8Array(val.buffer)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-            console.log('[' + ctx.device.name + '] RX:', bytes);
-
-            const getS = i => { let v = (val.getUint8(i+1)<<8)|val.getUint8(i); return v>=32768?v-65536:v; };
-
-            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x51) {
-                console.log('[' + ctx.device.name + '] *** QUATERNION RESPONSE RECEIVED ***');
-                
-                const modeLbl = ctx.ui.card.querySelector('.mode-indicator');
-                if(!modeLbl.innerText.includes("Quaternion")) {
-                    modeLbl.innerText = "Mode: Quaternion (Polled)";
-                    modeLbl.classList.remove('text-slate-500');
-                    modeLbl.classList.add('text-green-500');
-                    ctx.quatMode = true;
-                    ctx.ui.card.querySelector('.quat-rate-indicator').classList.remove('hidden');
-                }
-
-                ctx.quatReceiveCount++;
-                const now = Date.now();
-                if (now - ctx.lastQuatTime >= 1000) {
-                    const hz = ctx.quatReceiveCount;
-                    ctx.ui.card.querySelector('.quat-hz').innerText = hz + 'Hz';
-                    ctx.quatReceiveCount = 0;
-                    ctx.lastQuatTime = now;
-                }
-
-                const q0 = getS(4) / 32768.0;
-                const q1 = getS(6) / 32768.0;
-                const q2 = getS(8) / 32768.0;
-                const q3 = getS(10) / 32768.0;
-                
-                const q = new THREE.Quaternion(q1, q3, -q2, q0);
-
-                const vNose = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-                const vWing = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
-
-                const pitchDeg = Math.asin(Math.max(-1, Math.min(1, vNose.y))) * (180/Math.PI);
-                const wy = Math.max(-1, Math.min(1, vWing.y));
-                let rollDeg = Math.asin(wy) * (180/Math.PI) * -1;
-                let compass = Math.atan2(vNose.x, vNose.z) * (180/Math.PI);
-                if(compass < 0) compass += 360;
-
-                ctx.ui.card.querySelector('.val-ang-x').innerText = pitchDeg.toFixed(1) + "°";
-                ctx.ui.card.querySelector('.val-ang-y').innerText = rollDeg.toFixed(1) + "°";
-                ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
-
-                if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.copy(q);
-
-                const c = ctx.ui.chart;
-                c.data.datasets[0].data.push(pitchDeg);
-                c.data.datasets[1].data.push(rollDeg);
-                c.data.datasets[2].data.push(compass);
-                if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
-                c.update();
-                
-                if(isRecording) {
-                    ctx.dataLog.push({ 
-                        t: Date.now() - recordingStartTime, 
-                        pitch: pitchDeg, 
-                        roll: rollDeg, 
-                        yaw: compass,
-                        q0, q1, q2, q3
-                    });
-                }
-                return;
-            }
-
-            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x61) {
-                if (ctx.quatMode) return;
-                
-                const angX = getS(14)/32768*180, angY = getS(16)/32768*180, angZ = getS(18)/32768*180;
-                
-                const pitch = angX;
-                const roll = -angY;
-                let compass = -angZ; if(compass < 0) compass += 360; compass %= 360;
-
-                ctx.ui.card.querySelector('.val-ang-x').innerText = pitch.toFixed(1) + "°";
-                ctx.ui.card.querySelector('.val-ang-y').innerText = roll.toFixed(1) + "°";
-                ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
-
-                if (ctx.ui.mesh) {
-                    const e = new THREE.Euler(pitch*(Math.PI/180), compass*(Math.PI/180), roll*(Math.PI/180), 'YXZ');
-                    ctx.ui.mesh.userData.targetQuat.setFromEuler(e);
-                }
-                
-                const c = ctx.ui.chart;
-                c.data.datasets[0].data.push(pitch); 
-                c.data.datasets[1].data.push(roll); 
-                c.data.datasets[2].data.push(compass);
-                if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
-                c.update();
-                
-                if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, pitch, roll, yaw: compass });
-            }
-
-            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x64) {
-                const raw = (val.getUint8(5) << 8) | val.getUint8(4);
-                const voltage = raw / 100;
-                let pct = Math.round((voltage - 3.5) / (4.2 - 3.5) * 100);
-                if(pct < 0) pct = 0; if(pct > 100) pct = 100;
-                ctx.ui.card.querySelector('.bat-val').innerText = pct + "%";
-                if(pct < 20) ctx.ui.card.querySelector('.battery-indicator').classList.replace('text-slate-400', 'text-red-500');
-            }
+            if(!ctx) return;
             
-            if (val.getUint8(0) === 0x55 && val.getUint8(1) === 0x71 && val.getUint8(2) === 0x3A) {
-                const mc = ctx.ui.magChart;
-                mc.data.datasets[0].data.push({ x: getS(4), y: getS(6) });
-                if(mc.data.datasets[0].data.length > 300) mc.data.datasets[0].data.shift();
-                mc.update();
+            const buffer = new Uint8Array(event.target.value.buffer);
+            if(buffer.length < 2) return;
+
+            // Scan through entire buffer looking for 0x55 headers
+            for(let i = 0; i < buffer.length - 1; i++) {
+                if(buffer[i] !== 0x55) continue;
+                
+                const packetType = buffer[i + 1];
+                
+                // --- QUATERNION RESPONSE (0x55 0x71 0x51) ---
+                if(packetType === 0x71 && i + 2 < buffer.length && buffer[i + 2] === 0x51) {
+                    // Need at least 12 bytes: 55 71 51 00 [Q0L Q0H Q1L Q1H Q2L Q2H Q3L Q3H]
+                    if(i + 12 > buffer.length) continue;
+                    
+                    const getS = (offset) => {
+                        let v = (buffer[i + offset + 1] << 8) | buffer[i + offset];
+                        return v >= 32768 ? v - 65536 : v;
+                    };
+                    
+                    const q0 = getS(4) / 32768.0;
+                    const q1 = getS(6) / 32768.0;
+                    const q2 = getS(8) / 32768.0;
+                    const q3 = getS(10) / 32768.0;
+                    
+                    // Update mode indicator
+                    const modeLbl = ctx.ui.card.querySelector('.mode-indicator');
+                    if(!ctx.quatMode) {
+                        modeLbl.innerText = "Mode: Quaternion (Polled)";
+                        modeLbl.classList.remove('text-slate-500');
+                        modeLbl.classList.add('text-green-500');
+                        ctx.quatMode = true;
+                        ctx.ui.card.querySelector('.quat-rate-indicator').classList.remove('hidden');
+                    }
+
+                    // Calculate Hz
+                    ctx.quatReceiveCount++;
+                    const now = Date.now();
+                    if (now - ctx.lastQuatTime >= 1000) {
+                        ctx.ui.card.querySelector('.quat-hz').innerText = ctx.quatReceiveCount + 'Hz';
+                        ctx.quatReceiveCount = 0;
+                        ctx.lastQuatTime = now;
+                    }
+
+                    const q = new THREE.Quaternion(q1, q3, -q2, q0);
+
+                    const vNose = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+                    const vWing = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+
+                    const pitchDeg = Math.asin(Math.max(-1, Math.min(1, vNose.y))) * (180/Math.PI);
+                    const wy = Math.max(-1, Math.min(1, vWing.y));
+                    let rollDeg = Math.asin(wy) * (180/Math.PI) * -1;
+                    let compass = Math.atan2(vNose.x, vNose.z) * (180/Math.PI);
+                    if(compass < 0) compass += 360;
+
+                    ctx.ui.card.querySelector('.val-ang-x').innerText = pitchDeg.toFixed(1) + "°";
+                    ctx.ui.card.querySelector('.val-ang-y').innerText = rollDeg.toFixed(1) + "°";
+                    ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
+
+                    if (ctx.ui.mesh) ctx.ui.mesh.userData.targetQuat.copy(q);
+
+                    const c = ctx.ui.chart;
+                    c.data.datasets[0].data.push(pitchDeg);
+                    c.data.datasets[1].data.push(rollDeg);
+                    c.data.datasets[2].data.push(compass);
+                    if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
+                    c.update();
+                    
+                    if(isRecording) {
+                        ctx.dataLog.push({ 
+                            t: Date.now() - recordingStartTime, 
+                            pitch: pitchDeg, roll: rollDeg, yaw: compass,
+                            q0, q1, q2, q3
+                        });
+                    }
+                    
+                    i += 19; // Skip past this packet (20 bytes total for 0x71 response)
+                    continue;
+                }
+                
+                // --- EULER ANGLE (0x55 0x61) ---
+                if(packetType === 0x61) {
+                    if(ctx.quatMode) { i += 19; continue; } // Skip if using quaternion
+                    if(i + 20 > buffer.length) continue;
+                    
+                    const getS = (offset) => {
+                        let v = (buffer[i + offset + 1] << 8) | buffer[i + offset];
+                        return v >= 32768 ? v - 65536 : v;
+                    };
+                    
+                    const angX = getS(14)/32768*180, angY = getS(16)/32768*180, angZ = getS(18)/32768*180;
+                    const pitch = angX, roll = -angY;
+                    let compass = -angZ; if(compass < 0) compass += 360; compass %= 360;
+
+                    ctx.ui.card.querySelector('.val-ang-x').innerText = pitch.toFixed(1) + "°";
+                    ctx.ui.card.querySelector('.val-ang-y').innerText = roll.toFixed(1) + "°";
+                    ctx.ui.card.querySelector('.val-ang-z').innerText = compass.toFixed(0) + "°";
+
+                    if (ctx.ui.mesh) {
+                        const e = new THREE.Euler(pitch*(Math.PI/180), compass*(Math.PI/180), roll*(Math.PI/180), 'YXZ');
+                        ctx.ui.mesh.userData.targetQuat.setFromEuler(e);
+                    }
+                    
+                    const c = ctx.ui.chart;
+                    c.data.datasets[0].data.push(pitch); 
+                    c.data.datasets[1].data.push(roll); 
+                    c.data.datasets[2].data.push(compass);
+                    if(c.data.datasets[0].data.length > 50) c.data.datasets.forEach(d => d.data.shift());
+                    c.update();
+                    
+                    if(isRecording) ctx.dataLog.push({ t: Date.now()-recordingStartTime, pitch, roll, yaw: compass });
+                    
+                    i += 19;
+                    continue;
+                }
+                
+                // --- BATTERY (0x55 0x71 0x64) ---
+                if(packetType === 0x71 && i + 2 < buffer.length && buffer[i + 2] === 0x64) {
+                    if(i + 6 > buffer.length) continue;
+                    const raw = (buffer[i + 5] << 8) | buffer[i + 4];
+                    const voltage = raw / 100;
+                    let pct = Math.round((voltage - 3.5) / (4.2 - 3.5) * 100);
+                    if(pct < 0) pct = 0; if(pct > 100) pct = 100;
+                    ctx.ui.card.querySelector('.bat-val').innerText = pct + "%";
+                    if(pct < 20) ctx.ui.card.querySelector('.battery-indicator').classList.replace('text-slate-400', 'text-red-500');
+                    i += 19;
+                    continue;
+                }
+                
+                // --- MAGNETIC FIELD (0x55 0x71 0x3A) ---
+                if(packetType === 0x71 && i + 2 < buffer.length && buffer[i + 2] === 0x3A) {
+                    if(i + 8 > buffer.length) continue;
+                    const getS = (offset) => {
+                        let v = (buffer[i + offset + 1] << 8) | buffer[i + offset];
+                        return v >= 32768 ? v - 65536 : v;
+                    };
+                    const mc = ctx.ui.magChart;
+                    mc.data.datasets[0].data.push({ x: getS(4), y: getS(6) });
+                    if(mc.data.datasets[0].data.length > 300) mc.data.datasets[0].data.shift();
+                    mc.update();
+                    i += 19;
+                    continue;
+                }
             }
         }
 
@@ -714,18 +731,11 @@
         document.getElementById('stopRecordingBtn').addEventListener('click', stopRecording);
 
         document.getElementById('exportBtn').addEventListener('click', () => {
-            if (devices.size === 0) {
-                alert("No devices connected!");
-                return;
-            }
+            if (devices.size === 0) { alert("No devices connected!"); return; }
             
             let hasData = false;
             devices.forEach(ctx => { if(ctx.dataLog.length > 0) hasData = true; });
-            
-            if (!hasData) {
-                alert("No recorded data to export. Click 'Sync & Record' first!");
-                return;
-            }
+            if (!hasData) { alert("No recorded data to export. Click 'Sync & Record' first!"); return; }
             
             devices.forEach((ctx, id) => {
                 const deviceName = ctx.device.name || 'Unknown';
@@ -736,8 +746,7 @@
                 csv += '# Device: ' + deviceName + ' (ID: ' + id + ')\n';
                 csv += '# Mode: ' + mode + '\n';
                 csv += '# Data Points: ' + ctx.dataLog.length + '\n';
-                csv += '# Export Time: ' + new Date().toISOString() + '\n';
-                csv += '#\n';
+                csv += '# Export Time: ' + new Date().toISOString() + '\n#\n';
                 
                 if (ctx.quatMode && ctx.dataLog[0] && ctx.dataLog[0].q0 !== undefined) {
                     csv += 'Time(ms),Pitch,Roll,Yaw,Q0,Q1,Q2,Q3\n';
@@ -746,17 +755,13 @@
                     ).join('\n');
                 } else {
                     csv += 'Time(ms),Pitch,Roll,Yaw\n';
-                    csv += ctx.dataLog.map(r => 
-                        r.t + ',' + r.pitch.toFixed(3) + ',' + r.roll.toFixed(3) + ',' + r.yaw.toFixed(3)
-                    ).join('\n');
+                    csv += ctx.dataLog.map(r => r.t + ',' + r.pitch.toFixed(3) + ',' + r.roll.toFixed(3) + ',' + r.yaw.toFixed(3)).join('\n');
                 }
                 
                 const timestamp = syncTimestamp ? syncTimestamp.replace(/[:.]/g, '-').slice(0, 19) : 'unsync';
-                const filename = deviceName + '_' + timestamp + '.csv';
-                
                 const a = document.createElement('a'); 
                 a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); 
-                a.download = filename; 
+                a.download = deviceName + '_' + timestamp + '.csv'; 
                 a.click();
             });
             
